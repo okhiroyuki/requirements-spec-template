@@ -16,8 +16,10 @@
 
 var UC_LIST_SHEET_NAME = '📖 UC一覧';
 var UC_DETAIL_SHEET_NAME = '📖 UC詳細';
-/** ビジネス（業務）ユースケース：事業側の業務単位。BR に紐づく。 */
-var BUC_SHEET_NAME = '📗 ビジネスユースケース';
+/** BUC：事業側の業務単位。BR に紐づく。 */
+var BUC_SHEET_NAME = '📗 BUC';
+/** 業務単位ごとの手順・行動内容・関連 UC（一覧シートとは別）。 */
+var BUC_DETAIL_SHEET_NAME = '📙 BUC詳細';
 
 var ID_SHEET_NAME = '🔢 ID管理';
 
@@ -57,6 +59,7 @@ function createRequirementsSheet() {
   setupActors(ss);
   setupBusinessReqs(ss);
   setupBusinessUseCases(ss);
+  setupBucDetail(ss);
   setupUseCaseList(ss);
   setupUseCaseDetail(ss);
   setupFunctionalReqs(ss);
@@ -109,22 +112,43 @@ function getOrCreateSheet(ss, name) {
 }
 
 /**
+ * テンプレ再展開前にシートを「空」へ戻す。
+ * 値・書式に加え、データ入力規則（旧テンプレで列ごとに付けたドロップダウン）も明示的に消す。
+ * UC 一覧 から「関連BR」列を外したのにブックの D 列に旧 BR 入力規則が残っていると、
+ * ステータス「草案」を書き込んだ瞬間に「データ入力規則に違反しています」になってしまうため。
+ * maxRows/maxCols はシートの実サイズへクランプする（getMaxRows/getMaxColumns を超えないように）。
+ */
+function resetSheetCellsForTemplate_(sh, maxRows, maxCols) {
+  if (!sh) return;
+  sh.clearContents();
+  sh.clearFormats();
+  var rows = Math.min(Math.max(parseInt(maxRows, 10) || 500, 1), sh.getMaxRows());
+  var cols = Math.min(Math.max(parseInt(maxCols, 10) || 40, 1), sh.getMaxColumns());
+  try {
+    sh.getRange(1, 1, rows, cols).clearDataValidations();
+  } catch (e) {
+    Logger.log('resetSheetCellsForTemplate_(' + sh.getName() + '): ' + (e && e.message ? e.message : e));
+  }
+}
+
+/**
  * テンプレのタブ順を固定する（ガイド・行追加パネルと同じ論理順）。
  * insertSheet の既定位置の差を吸収する。
  */
 function reorderReqSpecSheetTabs_(ss) {
   var names = [
     '📋 概要',
+    '📌 前提条件',
     '👤 アクター',
     '🎯 ビジネス要求',
     BUC_SHEET_NAME,
+    BUC_DETAIL_SHEET_NAME,
     UC_LIST_SHEET_NAME,
     UC_DETAIL_SHEET_NAME,
     '⚙️ 機能要求',
     '🔒 非機能要求',
     '🚧 制約条件',
     '🔗 外部IF',
-    '📌 前提条件',
     '❓ 未解決事項',
     '📚 用語集',
     '✅ 変更履歴',
@@ -340,43 +364,21 @@ function getBrIdListRange_(ss) {
   return getFirstColumnIdRange_(ss.getSheetByName('🎯 ビジネス要求'));
 }
 
-/** 📖 UC一覧 の UC-ID（A 列）一覧範囲 */
-function getUcIdListRange_(ss) {
-  return getFirstColumnIdRange_(ss.getSheetByName(UC_LIST_SHEET_NAME));
-}
-
 /**
- * 📖 UC一覧 の「関連BR」列（4）に、🎯 ビジネス要求の BR-ID を選ぶ入力規則を付与する。
+ * 📖 UC一覧 の UC-ID（A 列）を DV の一覧元にする範囲。
+ * データ最終行だけに切ると、UC 追加直後や getLastRow の取りこぼしでプルダウンが古いままになるため、
+ * A2 から十分な行数（最低 500 行、最大 2000 行）まで広げ、空セルはプルダウンに出にくいまま一覧と連動させる。
  */
-function applyUcListRelatedBrValidation_(ss) {
-  var listSh = ss.getSheetByName(UC_LIST_SHEET_NAME);
-  if (!listSh) return;
-  var vr = getBrIdListRange_(ss);
-  var rule = vr
-    ? SpreadsheetApp.newDataValidation()
-        .requireValueInRange(vr, true)
-        .setAllowInvalid(false)
-        .build()
-    : null;
-
-  var lr = Math.min(listSh.getLastRow(), 500);
-  var r;
-  try {
-    for (r = 2; r <= lr; r++) {
-      var ucCell = String(listSh.getRange(r, 1).getValue()).trim();
-      if (!/^UC-\d+$/.test(ucCell)) continue;
-      var cell = listSh.getRange(r, 4);
-      if (rule) cell.setDataValidation(rule);
-      else cell.clearDataValidation();
-    }
-  } catch (e) {
-    var msg = String(e.message || e);
-    if (msg.indexOf('型付き') !== -1 || /typed column/i.test(msg)) {
-      Logger.log('applyUcListRelatedBrValidation_: skip typed table column — ' + msg);
-      return;
-    }
-    throw e;
-  }
+function getUcIdListRange_(ss) {
+  var sheet = ss.getSheetByName(UC_LIST_SHEET_NAME);
+  if (!sheet) return null;
+  var maxEnd = Math.min(sheet.getMaxRows(), 2000);
+  if (maxEnd < 2) return null;
+  var lastRow = Math.min(sheet.getLastRow(), maxEnd);
+  if (lastRow < 2) return null;
+  var endRow = Math.min(maxEnd, Math.max(lastRow, 500));
+  var numRows = endRow - 2 + 1;
+  return sheet.getRange(2, 1, numRows, 1);
 }
 
 /**
@@ -401,7 +403,7 @@ function applyFrRelatedUcValidation_(ss) {
       if (!/^FR-\d+$/.test(frCell)) continue;
       var cell = frSh.getRange(r, 3);
       if (rule) cell.setDataValidation(rule);
-      else cell.clearDataValidation();
+      else cell.clearDataValidations();
     }
   } catch (e) {
     var msg2 = String(e.message || e);
@@ -414,7 +416,7 @@ function applyFrRelatedUcValidation_(ss) {
 }
 
 /**
- * 📗 ビジネスユースケース の「関連BR」列に、🎯 ビジネス要求の BR-ID を選ぶ入力規則を付与する。
+ * 📗 BUC の「関連BR」列に、🎯 ビジネス要求の BR-ID を選ぶ入力規則を付与する。
  */
 function applyBucRelatedBrValidation_(ss) {
   var bucSh = ss.getSheetByName(BUC_SHEET_NAME);
@@ -435,7 +437,7 @@ function applyBucRelatedBrValidation_(ss) {
       if (!/^BUC-\d+$/.test(idCell)) continue;
       var cell = bucSh.getRange(r, 4);
       if (rule) cell.setDataValidation(rule);
-      else cell.clearDataValidation();
+      else cell.clearDataValidations();
     }
   } catch (e) {
     var msg = String(e.message || e);
@@ -447,11 +449,78 @@ function applyBucRelatedBrValidation_(ss) {
   }
 }
 
+/**
+ * 📙 BUC詳細 の手順表（手順・行動内容・関連UC の **3 列のみ**を想定）。主体は行動内容本文に含める。
+ * 「関連UC」（C 列）は 📖 UC一覧 A 列を参照。関連UCが無い手順は空欄のままにする。
+ * ブロック終端は次の「▼」行、または A〜C がすべて空の行まで（UC 詳細と同様の空行区切り）。
+ * 旧 4 列（アクター列あり）のシートは列を 3 列に直してから本関数を実行すること（C 列が行動内容でないと入力規則が誤る）。
+ */
+function applyBucDetailStepValidations_(ss) {
+  var sh = ss.getSheetByName(BUC_DETAIL_SHEET_NAME);
+  if (!sh) return;
+
+  var vrUc = getUcIdListRange_(ss);
+  var ruleUc = vrUc
+    ? SpreadsheetApp.newDataValidation()
+        .requireValueInRange(vrUc, true)
+        .setAllowInvalid(false)
+        .build()
+    : null;
+
+  var lrCap = Math.min(sh.getLastRow(), 1200);
+  var r;
+
+  try {
+    r = 1;
+    while (r <= lrCap) {
+      var headingA = String(sh.getRange(r, 1).getValue()).trim();
+      if (!/^▼\s*BUC-\d+/.test(headingA)) {
+        r++;
+        continue;
+      }
+      var hdrRow = r + 1;
+      var sr;
+      for (sr = hdrRow + 1; sr <= lrCap; sr++) {
+        var qa = String(sh.getRange(sr, 1).getValue()).trim();
+        var qb = String(sh.getRange(sr, 2).getValue()).trim();
+        var qc = String(sh.getRange(sr, 3).getValue()).trim();
+
+        if (qa.substring(0, 1) === '▼') break;
+        if (qa === '' && qb === '' && qc === '') break;
+
+        try {
+          sh.getRange(sr, 2).clearDataValidations();
+        } catch (ignoreClearB) {}
+
+        try {
+          if (ruleUc) sh.getRange(sr, 3).setDataValidation(ruleUc);
+          else sh.getRange(sr, 3).clearDataValidations();
+        } catch (eCell) {
+          var msgCell = String(eCell.message || eCell);
+          if (msgCell.indexOf('型付き') !== -1 || /typed column/i.test(msgCell)) {
+            Logger.log('applyBucDetailStepValidations_: row ' + sr + ' col 3 — ' + msgCell);
+          } else {
+            throw eCell;
+          }
+        }
+      }
+      r = sr;
+    }
+  } catch (e) {
+    var msgDv = String(e.message || e);
+    if (msgDv.indexOf('型付き') !== -1 || /typed column/i.test(msgDv)) {
+      Logger.log('applyBucDetailStepValidations_: ' + msgDv);
+      return;
+    }
+    throw e;
+  }
+}
+
 /** アクター名・関連 BR／UC・外部 IF 連携先など、別シート参照の入力規則をまとめて付与 */
 function applyAllReferenceValidations_(ss) {
   applyUcListActorValidation_(ss);
-  applyUcListRelatedBrValidation_(ss);
   applyBucRelatedBrValidation_(ss);
+  applyBucDetailStepValidations_(ss);
   applyFrRelatedUcValidation_(ss);
   applyExternalIfPartnerValidation_(ss);
 }
@@ -661,7 +730,7 @@ function applyUcListDropdownsLegacy_(ss) {
   for (var r = 2; r <= lr; r++) {
     var text = String(sh.getRange(r, 1).getValue()).trim();
     if (/^UC-\d+$/.test(text)) {
-      setDropdown(sh, r, 5, opts);
+      setDropdown(sh, r, 4, opts);
     }
   }
 }
@@ -701,7 +770,7 @@ function applyStatusFormattingAfterTables_(ss) {
   sh = ss.getSheetByName('❓ 未解決事項');
   if (sh) addStatusFormatting(sh, 7, 30);
   sh = ss.getSheetByName(UC_LIST_SHEET_NAME);
-  if (sh) addStatusFormatting(sh, 5, 500);
+  if (sh) addStatusFormatting(sh, 4, 500);
 }
 
 // ─────────────────────────────────────────────
@@ -710,8 +779,7 @@ function applyStatusFormattingAfterTables_(ss) {
 
 function setupOverview(ss) {
   const sh = getOrCreateSheet(ss, '📋 概要');
-  sh.clearContents();
-  sh.clearFormats();
+  resetSheetCellsForTemplate_(sh);
 
   // タイトル
   sh.getRange('A1').setValue('要求仕様書').setFontSize(16).setFontWeight('bold');
@@ -764,7 +832,7 @@ function setupOverview(ss) {
 
 function setupActors(ss) {
   const sh = getOrCreateSheet(ss, '👤 アクター');
-  sh.clearContents(); sh.clearFormats();
+  resetSheetCellsForTemplate_(sh);
 
   const headers = ['アクターID', 'アクター名', '説明・ロール', '利用頻度', '備考'];
   sh.getRange(1, 1, 1, headers.length).setValues([headers]);
@@ -780,7 +848,7 @@ function setupActors(ss) {
 
 function setupBusinessReqs(ss) {
   const sh = getOrCreateSheet(ss, '🎯 ビジネス要求');
-  sh.clearContents(); sh.clearFormats();
+  resetSheetCellsForTemplate_(sh);
 
   const headers = ['要求ID', 'ビジネス要求（1文）', '背景・理由', '優先度', '成功指標', '顧客コメント ✏️', 'ステータス'];
   sh.getRange(1, 1, 1, headers.length).setValues([headers]);
@@ -791,13 +859,12 @@ function setupBusinessReqs(ss) {
 }
 
 // ─────────────────────────────────────────────
-// タブ 3b: 📗 ビジネスユースケース
+// タブ 3b: 📗 BUC
 // ─────────────────────────────────────────────
 
 function setupBusinessUseCases(ss) {
   var sh = getOrCreateSheet(ss, BUC_SHEET_NAME);
-  sh.clearContents();
-  sh.clearFormats();
+  resetSheetCellsForTemplate_(sh);
 
   var headers = ['BUCID', '業務名', '業務の概要', '関連BR'];
   sh.getRange(1, 1, 1, headers.length).setValues([headers]);
@@ -808,18 +875,62 @@ function setupBusinessUseCases(ss) {
 }
 
 // ─────────────────────────────────────────────
+// タブ 3c: 📙 BUC詳細
+// ─────────────────────────────────────────────
+
+function setupBucDetail(ss) {
+  var sh = getOrCreateSheet(ss, BUC_DETAIL_SHEET_NAME);
+  resetSheetCellsForTemplate_(sh, 1200, 10);
+  writeBucDetailBlockAtRow_(sh, 1, 'BUC-001', '受注登録・検証業務', false, [
+    ['1', '顧客が注文書を送付する', ''],
+    ['2', '一般ユーザーが注文内容をシステムに入力する', 'UC-001'],
+    ['3', 'システムがマスタと照合し、不備があれば警告を出す', 'UC-001'],
+  ]);
+  setColWidths(sh, [64, 520, 112]);
+  sh.setRowHeights(1, sh.getLastRow(), 24);
+}
+
+/**
+ * BUC詳細ブロック（▼ 見出し〜手順表：手順・行動内容・関連UC）。
+ * 主体・アクターは行動内容に「○○が…」として含める。 skeletonOnly は見出し＋表頭＋1行の空テンプレ。
+ */
+function writeBucDetailBlockAtRow_(sh, rowStart, bucIdToken, bucName, skeletonOnly, stepRows) {
+  skeletonOnly = !!skeletonOnly;
+  stepRows = stepRows || [];
+
+  var heading = '▼ ' + bucIdToken + ': ' + bucName;
+  sh.getRange(rowStart, 1).setValue(heading).setFontWeight('bold').setBackground('#e8f0fe');
+  sh.getRange(rowStart, 1, 1, 3).merge();
+
+  var hdrRow = rowStart + 1;
+  var labels = [['手順', '行動内容', '関連UC']];
+  sh.getRange(hdrRow, 1, 1, 3).setValues(labels);
+  sh.getRange(hdrRow, 1, 1, 3).setBackground('#1a73e8').setFontColor('#ffffff').setFontWeight('bold');
+
+  if (skeletonOnly) {
+    sh.getRange(hdrRow + 1, 1, 1, 3).setValues([['', '', '']]);
+    return;
+  }
+  if (stepRows.length > 0) {
+    var dStart = hdrRow + 1;
+    sh.getRange(dStart, 1, stepRows.length, 3).setValues(stepRows);
+    sh.getRange(dStart, 2, stepRows.length, 1).setWrap(true);
+  }
+}
+
+// ─────────────────────────────────────────────
 // タブ 4a: 📖 UC一覧
 // ─────────────────────────────────────────────
 
 function setupUseCaseList(ss) {
   const sh = getOrCreateSheet(ss, UC_LIST_SHEET_NAME);
-  sh.clearContents(); sh.clearFormats();
+  resetSheetCellsForTemplate_(sh, 2000, 10);
 
-  const listHeaders = ['UCID', 'アクター名', 'ユースケース名', '関連BR', 'ステータス'];
+  const listHeaders = ['UCID', 'アクター名', 'ユースケース名', 'ステータス'];
   sh.getRange(1, 1, 1, listHeaders.length).setValues([listHeaders]);
   styleHeader(sh, 1, listHeaders.length);
 
-  setColWidths(sh, [160, 320, 160, 100, 100]);
+  setColWidths(sh, [160, 280, 240, 120]);
   sh.setRowHeights(1, 1, 24);
 }
 
@@ -829,7 +940,7 @@ function setupUseCaseList(ss) {
 
 function setupUseCaseDetail(ss) {
   const sh = getOrCreateSheet(ss, UC_DETAIL_SHEET_NAME);
-  sh.clearContents(); sh.clearFormats();
+  resetSheetCellsForTemplate_(sh, 1200, 10);
 
   writeUcDetailBlockAtRow_(sh, 1, 'UC-001', '受注データを登録する', '一般ユーザー');
 
@@ -910,7 +1021,7 @@ function writeUcDetailBlockAtRow_(sh, rowStart, ucIdToken, ucName, ucActorLabel,
 
 function setupFunctionalReqs(ss) {
   const sh = getOrCreateSheet(ss, '⚙️ 機能要求');
-  sh.clearContents(); sh.clearFormats();
+  resetSheetCellsForTemplate_(sh);
 
   const headers = ['要求ID', '機能名', '関連UC', '要求記述（条件＋主語＋動作）', '受け入れ基準①', '受け入れ基準②', '受け入れ基準③', '優先度', '顧客コメント ✏️', '合意ステータス', '備考'];
   sh.getRange(1, 1, 1, headers.length).setValues([headers]);
@@ -926,7 +1037,7 @@ function setupFunctionalReqs(ss) {
 
 function setupNonFunctionalReqs(ss) {
   const sh = getOrCreateSheet(ss, '🔒 非機能要求');
-  sh.clearContents(); sh.clearFormats();
+  resetSheetCellsForTemplate_(sh);
 
   const headers = ['要求ID', 'カテゴリ', '項目名', '要求値（数値必須）', '測定条件', '測定方法', '顧客コメント ✏️', '合意ステータス'];
   sh.getRange(1, 1, 1, headers.length).setValues([headers]);
@@ -942,7 +1053,7 @@ function setupNonFunctionalReqs(ss) {
 
 function setupConstraints(ss) {
   const sh = getOrCreateSheet(ss, '🚧 制約条件');
-  sh.clearContents(); sh.clearFormats();
+  resetSheetCellsForTemplate_(sh);
 
   const headers = ['制約ID', 'カテゴリ', '制約内容', '理由', '顧客コメント ✏️', 'ステータス'];
   sh.getRange(1, 1, 1, headers.length).setValues([headers]);
@@ -958,7 +1069,7 @@ function setupConstraints(ss) {
 
 function setupExternalIF(ss) {
   const sh = getOrCreateSheet(ss, '🔗 外部IF');
-  sh.clearContents(); sh.clearFormats();
+  resetSheetCellsForTemplate_(sh);
 
   const headers = ['IF-ID', '連携先システム', '方向', 'プロトコル／形式', '頻度', 'データ概要', '担当部署', '備考'];
   sh.getRange(1, 1, 1, headers.length).setValues([headers]);
@@ -974,8 +1085,7 @@ function setupExternalIF(ss) {
 
 function setupAssumptions(ss) {
   var sh = getOrCreateSheet(ss, '📌 前提条件');
-  sh.clearContents();
-  sh.clearFormats();
+  resetSheetCellsForTemplate_(sh);
 
   var headers = ['前提ID', '前提条件', 'リスク（崩れた場合の影響）'];
   sh.getRange(1, 1, 1, headers.length).setValues([headers]);
@@ -991,7 +1101,7 @@ function setupAssumptions(ss) {
 
 function setupOpenIssues(ss) {
   const sh = getOrCreateSheet(ss, '❓ 未解決事項');
-  sh.clearContents(); sh.clearFormats();
+  resetSheetCellsForTemplate_(sh);
 
   const headers = ['Issue-ID', '内容', '影響する要求ID', '担当者', '期限', '回答・決定内容', 'ステータス'];
   sh.getRange(1, 1, 1, headers.length).setValues([headers]);
@@ -1007,7 +1117,7 @@ function setupOpenIssues(ss) {
 
 function setupGlossary(ss) {
   const sh = getOrCreateSheet(ss, '📚 用語集');
-  sh.clearContents(); sh.clearFormats();
+  resetSheetCellsForTemplate_(sh);
 
   const headers = ['用語', '定義', '類義語・注意', '初出箇所'];
   sh.getRange(1, 1, 1, headers.length).setValues([headers]);
@@ -1023,7 +1133,7 @@ function setupGlossary(ss) {
 
 function setupChangeLog(ss) {
   const sh = getOrCreateSheet(ss, '✅ 変更履歴');
-  sh.clearContents(); sh.clearFormats();
+  resetSheetCellsForTemplate_(sh);
 
   const headers = ['バージョン', '日付', '変更者', '変更内容', '影響箇所'];
   sh.getRange(1, 1, 1, headers.length).setValues([headers]);
@@ -1050,6 +1160,7 @@ function seedTemplateSampleRows_(ss) {
       ['ACT-003', '既存受注管理システム', '本プロジェクトから連携するレガシー受注・在庫基盤など', 'リアルタイム', ''],
       ['ACT-004', '会計システム', '請求データ連携などの経理・会計向け連携システム', '日次（深夜）', ''],
       ['ACT-005', 'APIサーバー', 'SendGrid 等の外部 HTTP API／通知エンドポイントを束ねて表すときの代表名', 'イベント駆動', ''],
+      ['ACT-006', '顧客', '業務コンテキスト上の発注・問い合わせ側の主体', '', ''],
     ];
     sh.getRange(2, 1, data.length, 5).setValues(data);
     sh.setRowHeights(1, sh.getLastRow(), 24);
@@ -1082,11 +1193,11 @@ function seedTemplateSampleRows_(ss) {
   sh = ss.getSheetByName(UC_LIST_SHEET_NAME);
   if (sh) {
     data = [
-      ['UC-001', '一般ユーザー', '受注データを登録する', 'BR-001', '草案'],
-      ['UC-002', '一般ユーザー', '受注一覧を照会する', 'BR-001', '草案'],
-      ['UC-003', '管理者', 'ユーザーを管理する', '', '草案'],
+      ['UC-001', '一般ユーザー', '受注データを登録する', '草案'],
+      ['UC-002', '一般ユーザー', '受注一覧を照会する', '草案'],
+      ['UC-003', '管理者', 'ユーザーを管理する', '草案'],
     ];
-    sh.getRange(2, 1, data.length, 5).setValues(data);
+    sh.getRange(2, 1, data.length, 4).setValues(data);
     sh.setRowHeights(1, sh.getLastRow(), 24);
   }
 
@@ -1209,8 +1320,7 @@ function seedTemplateSampleRows_(ss) {
 /** 🔢 ID管理：ヘッダのみ（seed 後 syncIdCountersFromBookCore で中身を埋める） */
 function setupIdSheetHeaderOnly_(ss) {
   var sh = getOrCreateSheet(ss, ID_SHEET_NAME);
-  sh.clearContents();
-  sh.clearFormats();
+  resetSheetCellsForTemplate_(sh);
   sh.getRange(1, 1, 1, 3).setValues([['キー', '最終発番（数値）', '説明']]);
   styleHeader(sh, 1, 3);
   setColWidths(sh, [100, 130, 320]);
@@ -1333,8 +1443,8 @@ function scanMaxIdsFromBook(ss) {
     if (m2) bump('CON', m2[2]);
   });
 
-  // UC 一覧（A 列）および UC 詳細（見出し ▼ UC-nnn）
-  ;[UC_LIST_SHEET_NAME, UC_DETAIL_SHEET_NAME].forEach(function (name) {
+  // UC 一覧（A 列）・UC 詳細（▼ UC-nnn）・BUC詳細（▼ BUC-nnn）
+  ;[UC_LIST_SHEET_NAME, UC_DETAIL_SHEET_NAME, BUC_DETAIL_SHEET_NAME].forEach(function (name) {
     var ucSh = ss.getSheetByName(name);
     if (!ucSh) return;
     var lr2 = ucSh.getLastRow();
@@ -1344,6 +1454,8 @@ function scanMaxIdsFromBook(ss) {
       if (m1) bump('UC', m1[1]);
       var m2 = text.match(/▼\s*UC-(\d+)/);
       if (m2) bump('UC', m2[1]);
+      var m3 = text.match(/▼\s*BUC-(\d+)/);
+      if (m3) bump('BUC', m3[1]);
     }
   });
 
@@ -1439,15 +1551,15 @@ function getAddRowPanelHtml_() {
       '</style></head><body>' +
       '<h1>行を追加</h1>' +
       '<p class="desc">表の末尾に 1 行追加し、ID を自動採番します（ボタンはシートタブと同じ並び）。パネルを開いたまま連続で押せます。</p>' +
+      btn('menuAddASM', 'ASM · 📌 前提条件') +
       btn('menuAddACT', 'ACT · 👤 アクター') +
       btn('menuAddBR', 'BR · 🎯 ビジネス要求') +
-      btn('menuAddBUC', 'BUC · 📗 ビジネスユースケース') +
+      btn('menuAddBUC', 'BUC · 📗 BUC') +
       btn('menuAddUC', 'UC · 📖 UC一覧') +
       btn('menuAddFR', 'FR · ⚙️ 機能要求') +
       btn('menuAddNFR', 'NFR · 🔒 非機能要求') +
       btn('menuAddCON', 'CON · 🚧 制約条件') +
       btn('menuAddIF', 'IF · 🔗 外部 IF') +
-      btn('menuAddASM', 'ASM · 📌 前提条件') +
       btn('menuAddOI', 'OI · ❓ 未解決事項') +
       '<script>' +
       fail +
@@ -1464,6 +1576,7 @@ function onOpen() {
     .addItem('🔢 IDカウンタをブックから再同期', 'syncIdCountersFromBook')
     .addItem('🔗 入力規則をすべて更新（BR／UC／アクター連携）', 'menuRefreshAllInputValidations')
     .addItem('🧩 行を追加パネル（サイドバー）', 'showAddRowPanel')
+    .addItem('📙 選択行の BUC 詳細を追加／更新', 'menuAppendBucDetailFromListRow')
     .addItem('📖 選択行の UC 詳細を追加／更新', 'menuAppendUcDetailFromListRow')
     .addSeparator()
     .addItem('📝 Markdown を作成（表示・コピー）', 'exportRequirementsToMarkdown')
@@ -1539,9 +1652,9 @@ function menuAddUC() {
     }
     // BR / FR などと同様に appendRow（テーブル API の矩形と insertRowAfter + setValues の組み合わせで
     // 「データは 1 行だが範囲は N 行」エラーになる場合があるため）
-    sh.appendRow([id, '', '', '', '草案']);
+    sh.appendRow([id, '', '', '草案']);
     var row = sh.getLastRow();
-    setDropdown(sh, row, 5, ['草案', 'レビュー中', '合意済', '保留', '廃止']);
+    setDropdown(sh, row, 4, ['草案', 'レビュー中', '合意済', '保留', '廃止']);
     applyAllReferenceValidations_(ss);
   } catch (e) {
     notifyUser_(String(e.message || e), 'エラー');
@@ -1572,6 +1685,84 @@ function getUcDetailAppendStartRow_(detailSh) {
   }
   if (maxR === 0) return 1;
   return maxR + 2;
+}
+
+/** 📙 BUC詳細 の A 列見出し「▼ BUC-xxx: …」の開始行。無ければ 0 */
+function findBucDetailBlockStartRow_(detailSh, bucIdToken) {
+  var lr = detailSh.getLastRow();
+  var prefix = '▼ ' + bucIdToken;
+  for (var rb = 1; rb <= lr; rb++) {
+    var tb = String(detailSh.getRange(rb, 1).getValue()).trim();
+    if (tb.indexOf(prefix) === 0) return rb;
+  }
+  return 0;
+}
+
+/** 追記先の先頭行（UC 詳細と同様、列 A が最終に値がある行の次のあとに空行 1 行）。 */
+function getBucDetailAppendStartRow_(detailSh) {
+  var lrBd = detailSh.getLastRow();
+  if (lrBd < 1) return 1;
+  var valsBd = detailSh.getRange(1, 1, lrBd, 1).getValues();
+  var maxRb = 0;
+  var ib;
+  for (ib = 0; ib < valsBd.length; ib++) {
+    if (String(valsBd[ib][0]).trim() !== '') maxRb = ib + 1;
+  }
+  if (maxRb === 0) return 1;
+  return maxRb + 2;
+}
+
+/**
+ * アクティブセルが 📗 BUC のデータ行のとき、その業務の手順ブロックを 📙 BUC詳細 に追加する。
+ * 見出し直後が表頭行（手順・行動内容・関連UC）。ブロック終端は UC 詳細と同様、次の「▼」行または A〜C 全空白行まで。
+ */
+function menuAppendBucDetailFromListRow() {
+  try {
+    var ssBd = SpreadsheetApp.getActiveSpreadsheet();
+    var listBd = ssBd.getActiveSheet();
+    if (listBd.getName() !== BUC_SHEET_NAME) {
+      notifyUser_('「' + BUC_SHEET_NAME + '」タブを表示し、追加したい業務の行を選択してから実行してください。', 'BUC 詳細');
+      return;
+    }
+    var rowBd = ssBd.getActiveRange().getRow();
+    if (rowBd < 2) {
+      notifyUser_('データ行（2行目以降）を選択してください。', 'BUC 詳細');
+      return;
+    }
+    var bucId = String(listBd.getRange(rowBd, 1).getValue()).trim();
+    var bucName = String(listBd.getRange(rowBd, 2).getValue()).trim();
+    if (!/^BUC-\d+$/.test(bucId)) {
+      notifyUser_('A列に BUC-nnn 形式の BUCID がある行を選択してください。', 'BUC 詳細');
+      return;
+    }
+    var detailBd = ssBd.getSheetByName(BUC_DETAIL_SHEET_NAME);
+    if (!detailBd) {
+      notifyUser_('シート「' + BUC_DETAIL_SHEET_NAME + '」がありません。createRequirementsSheet を実行してください。', 'BUC 詳細');
+      return;
+    }
+    var existingBd = findBucDetailBlockStartRow_(detailBd, bucId);
+    if (existingBd > 0) {
+      var uiBd = SpreadsheetApp.getUi();
+      var respBd = uiBd.alert(
+        'BUC 詳細',
+        bucId + ' の詳細ブロックは既に「' + BUC_DETAIL_SHEET_NAME + '」にあります。該当の見出しセルへ移動しますか？',
+        uiBd.ButtonSet.YES_NO
+      );
+      if (respBd === uiBd.Button.YES) {
+        ssBd.setActiveSheet(detailBd);
+        detailBd.getRange(existingBd, 1).activate();
+      }
+      return;
+    }
+    var startRowBd = getBucDetailAppendStartRow_(detailBd);
+    writeBucDetailBlockAtRow_(detailBd, startRowBd, bucId, bucName || bucId, true, []);
+    applyAllReferenceValidations_(ssBd);
+    ssBd.setActiveSheet(detailBd);
+    detailBd.getRange(startRowBd, 1).activate();
+    toastDone_('BUC詳細に手順・行動内容・関連UC の 3 列表の枠を追加しました（本文は自分で記入）。', 'BUC 詳細');
+  } catch (e) {
+    notifyUser_(String(e.message || e), 'エラー');
+  }
 }
 
 /**
@@ -1762,11 +1953,24 @@ function exportRequirementsToMarkdown() {
       md += extractTableAsMarkdown(overviewSheet, 22, 1, 4) + '\n\n';
     }
 
+    const asmSheetMd = ss.getSheetByName('📌 前提条件');
+    if (asmSheetMd) {
+      md += '## 📌 前提条件\n\n';
+      md += extractTableAsMarkdown(asmSheetMd, 1, 1, 3) + '\n\n';
+    }
+
+    const actorMap = readActorMap_(ss);
+    const actorNameToId = readActorNameToIdMap_(ss);
+
+    const bucListMd = ss.getSheetByName(BUC_SHEET_NAME);
+    const bucDetailMd = ss.getSheetByName(BUC_DETAIL_SHEET_NAME);
+    if (bucListMd || bucDetailMd) {
+      md += parseBucUseCaseSheets_(bucListMd, bucDetailMd);
+    }
+
     const ucList = ss.getSheetByName(UC_LIST_SHEET_NAME);
     const ucDetail = ss.getSheetByName(UC_DETAIL_SHEET_NAME);
     const legacyUcSheet = ss.getSheetByName('📖 ユースケース');
-    const actorMap = readActorMap_(ss);
-    const actorNameToId = readActorNameToIdMap_(ss);
     if (ucList || ucDetail) {
       md += parseUseCaseSheets_(ucList, ucDetail, actorMap, actorNameToId);
     } else if (legacyUcSheet) {
@@ -1776,12 +1980,10 @@ function exportRequirementsToMarkdown() {
     const sheetsToProcess = [
       { name: '👤 アクター', startRow: 1, cols: 5 },
       { name: '🎯 ビジネス要求', startRow: 1, cols: 7 },
-      { name: BUC_SHEET_NAME, startRow: 1, cols: 4 },
       { name: '⚙️ 機能要求', startRow: 1, cols: 11 },
       { name: '🔒 非機能要求', startRow: 1, cols: 8 },
       { name: '🚧 制約条件', startRow: 1, cols: 6 },
       { name: '🔗 外部IF', startRow: 1, cols: 8 },
-      { name: '📌 前提条件', startRow: 1, cols: 3 },
       { name: '❓ 未解決事項', startRow: 1, cols: 7 },
       { name: '📚 用語集', startRow: 1, cols: 4 },
       { name: '✅ 変更履歴', startRow: 1, cols: 5 }
@@ -1845,6 +2047,85 @@ function overviewScopeBulletBlock(sheet, startRow, endRow) {
   }
 
   return lines.length ? lines.join('\n') + '\n' : '\n';
+}
+
+/** 📗 BUC 一覧 + 📙 BUC詳細 を Markdown にする（UC と同様の並び）。 */
+function parseBucUseCaseSheets_(listSheet, detailSheet) {
+  let mdBd = '## BUC\n\n';
+  if (listSheet && listSheet.getLastRow() >= 1) {
+    mdBd += '### 一覧\n\n';
+    mdBd += extractTableAsMarkdown(listSheet, 1, 1, 4) + '\n\n';
+  }
+  if (detailSheet && detailSheet.getLastRow() > 0) {
+    mdBd += parseBucDetailSheet_(detailSheet);
+  }
+  return mdBd;
+}
+
+/**
+ * 📙 BUC詳細（▼ BUC-nnn ブロックと手順表：手順・行動内容・関連UC の 3 列）。
+ * ブロック間の区切りは 📖 UC詳細 と同様、次の行が「▼」で始まるか、手順行として解釈した内容がすべて空のときまでが 1 ブロック。
+ * 見出し直後の行が表頭（A 列が「手順」）なら 1 行だけ読んで旧 4 列（手順・アクター・行動内容・関連UC）かを判定し、Markdown は常に 3 列に正規化する。
+ */
+function parseBucDetailSheet_(sheet) {
+  var mdD = '';
+  var lastRd = sheet.getLastRow();
+  var lastCd = sheet.getLastColumn();
+  if (lastRd === 0) return mdD;
+
+  var datD = sheet.getRange(1, 1, lastRd, Math.max(lastCd, 4)).getValues();
+  var ri = 0;
+  while (ri < datD.length) {
+    var cellAd = String(datD[ri][0]).trim();
+    if (/^▼\s*BUC-/.test(cellAd)) {
+      mdD += '### ' + cellAd + '\n\n';
+      ri++;
+      if (ri >= datD.length) break;
+      var hdrA = String(datD[ri][0]).trim();
+      var hdrB = String(datD[ri][1] != null ? datD[ri][1] : '').trim();
+      var legacyTable = /^手順$/.test(hdrA) && hdrB === 'アクター';
+      if (/^手順$/.test(hdrA)) {
+        ri++;
+      }
+      var tableD = [['手順', '行動内容', '関連UC']];
+      while (ri < datD.length) {
+        var ra = String(datD[ri][0]).trim();
+        var rb = String(datD[ri][1] != null ? datD[ri][1] : '').trim();
+        var rc = String(datD[ri][2] != null ? datD[ri][2] : '').trim();
+        if (ra.substring(0, 1) === '▼') break;
+
+        var actionCell;
+        var ucCell;
+        if (legacyTable) {
+          var subjL = rb;
+          var bodyL = rc;
+          if (subjL && bodyL) actionCell = subjL + 'が' + bodyL;
+          else actionCell = subjL || bodyL;
+          ucCell = datD[ri][3];
+        } else {
+          actionCell = datD[ri][1];
+          ucCell = datD[ri][2];
+        }
+
+        if (
+          ra === '' &&
+          String(actionCell != null ? actionCell : '').trim() === '' &&
+          String(ucCell != null ? ucCell : '').trim() === ''
+        ) {
+          break;
+        }
+
+        tableD.push([datD[ri][0], actionCell, ucCell]);
+        ri++;
+      }
+      if (tableD.length > 1) {
+        mdD += arrayToMarkdownTable(tableD) + '\n\n';
+      }
+      continue;
+    }
+    ri++;
+  }
+  return mdD;
 }
 
 /** 📖 UC一覧 + 📖 UC詳細 を Markdown にする */
@@ -2045,7 +2326,7 @@ function extractExternalIfTableAsMarkdown_(sheet, actorMap, actorNameToId) {
 function extractUcListTableAsMarkdown_(sheet, actorMap, actorNameToId) {
   var startRow = 1;
   var startCol = 1;
-  var numCols = 5;
+  var numCols = 4;
   var lastRow = sheet.getLastRow();
   if (lastRow < startRow) return '';
   var numRows = lastRow - startRow + 1;
