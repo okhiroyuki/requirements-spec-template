@@ -1,32 +1,80 @@
-# 要求仕様書テンプレート（Markdown / Google スプレッドシート）
+# 要求仕様書テンプレート（Google スプレッドシート）
 
-顧客レビューと開発側の記述を両立させるための、**要求仕様書のひな形**と**スプレッドシート自動生成**のセットです。
+本テンプレートは、**要求仕様**を**Google スプレッドシートで** 整理し、その内容を元にエンジニア向けにmarkdown形式の成果物を出力させる**ひな形**です。同梱の **Google Apps Script** で、タブ構成・採番・メニュー（行追加や Markdown 書き出しなど）が自動で展開されます。
 
-## 同梱ファイル
+## 作業の流れ
+
+1. 初回 `createRequirementsSheet` でテンプレを展開する。
+2. スプレッドシートで編集していく。
+3. スプレッドシートの内容を元に、markdownを生成する。
+
+```mermaid
+flowchart TB
+  script["scripts/create-spreadsheet.gs"]
+  book["Googleスプレッドシート"]
+  md["Markdownファイル"]
+  script -->|"テンプレ生成"| book
+  book -->|"編集"| book
+  book -->|"Markdown 書き出し"| md
+```
+
+
+
+## リポジトリ構成
+
+### ドキュメント（[`docs/`](docs/)）
 
 | ファイル | 役割 |
 |----------|------|
-| [`requirements-spec-template.md`](requirements-spec-template.md) | Markdown 版の要求仕様書テンプレート。Git / Notion / 社内 Wiki などにそのまま貼りやすい構成。 |
-| [`google-sheets-guide.md`](google-sheets-guide.md) | Google スプレッドシート版の**タブ一覧・列定義・運用ルール・共有の推奨**をまとめたガイド。 |
-| [`create-spreadsheet.gs`](create-spreadsheet.gs) | 上記ガイドに沿ったシート（タブ・ヘッダー・ドロップダウン・条件付き書式など）を**一括で作成する** Google Apps Script。 |
+| [`docs/README.md`](docs/README.md) | ドキュメント一覧（このリポジトリの説明への入口）。 |
+| [`docs/google-sheets-guide.md`](docs/google-sheets-guide.md) | ブックの**編集・運用**、**ID**、**記述スタイル**、共有のコツなど。 |
 
-## どれを使うか
 
-- **ドキュメントをテキストで管理したい** → `requirements-spec-template.md` をコピーして編集。
-- **顧客とスプレッドシート上でコメント・レビューしたい** → `google-sheets-guide.md` を読み、`create-spreadsheet.gs` でブックを生成してから運用。
+### スクリプト（[`scripts/`](scripts/)）とマニフェスト
 
-Markdown 版とスプレッドシート版は章立て・要求の種類が対応しており、必要に応じて片方を正とし、もう一方へ同期する想定です。
 
-## Google スプレッドシートを作る手順
+| ファイル | 役割 |
+|----------|------|
+| [`scripts/README.md`](scripts/README.md) | Apps Script ソースの一覧と貼り付け手順への入口。 |
+| [`scripts/create-spreadsheet.gs`](scripts/create-spreadsheet.gs) | シート一括生成、`createRequirementsSheet`、行追加パネル、Markdown 書き出し、ID 採番・再同期、メニュー登録。**テンプレ変更はこのファイル**。 |
+| [`appsscript.json`](appsscript.json) | Advanced サービス **Google Sheets API（Sheets）** 用マニフェスト（テーブル化・チップ型ドロップダウンに推奨）。無くても動作するが、従来の矢印付きデータ検証にフォールバックする。 |
+
+
+### 参考（生成物のサンプル）
+
+
+| ファイル                                                         | 役割                                         |
+| ------------------------------------------------------------ | ------------------------------------------ |
+| `[output/requirements-spec.md](output/requirements-spec.md)` | メニューから書き出した Markdown の**サンプル例**。 |
+
+
+## 初回セットアップ（Google スプレッドシート）
 
 1. 新しい [Google スプレッドシート](https://sheets.google.com/) を作成する。
 2. **拡張機能** → **Apps Script** を開く。
-3. エディタのデフォルトコードを削除し、`create-spreadsheet.gs` の内容を**すべて**貼り付けて保存する。
-4. 関数 **`createRequirementsSheet`** を選び、**実行**する（初回は権限の承認が必要）。
-5. スプレッドシートに戻ると、ガイドに記載されたタブ（📋 概要、👤 アクター、🎯 ビジネス要求 など）が生成されている。
+3. エディタのデフォルトコードを削除し、[scripts/create-spreadsheet.gs](scripts/create-spreadsheet.gs) の内容を**すべて**貼り付けて保存する。
+4. **（推奨）** テーブル API でチップ型のステータス等を使うには、次のいずれかを行う。
+  - **A.** マニフェストを使う（リポジトリと同じ設定）— 手順は下記 **「`appsscript.json` の入れ方」**。
+  - **B.** 左の **サービス**（＋）から **Google Sheets API** の **Sheets** を追加して保存する。
+  - どちらも未実施でもスクリプトは動くが、従来の矢印付きデータ検証にフォールバックする。
+5. 関数 `createRequirementsSheet` を選び、**実行**する（初回は権限の承認が必要）。**実行するたびに**各シートが初期サンプルで上書きされる（確認ダイアログなし）。入力を残したままにしたい場合は **`createRequirementsSheet` を再実行しない**こと。
+6. スプレッドシートに戻ると、ガイドに記載されたタブ（📋 概要、👤 アクター、🎯 ビジネス要求 など）ができる。**完了ダイアログ**に、メニュー「要求仕様書」を出すための再読み込み案内が含まれる。
 
-詳しい列の意味や顧客共有の注意点は **`google-sheets-guide.md`** を参照してください。
+### `appsscript.json` の入れ方（ブラウザの Apps Script エディタ）
 
-## 記述の前提（抜粋）
+リポジトリの `[appsscript.json](appsscript.json)` をまだコピーしていない場合は、次のとおり追加する。
 
-機能要求は「**[条件] のとき、[主語] は [動作] する**」の形、非機能要求は**数値・測定可能な基準**で書く、といった原則は `requirements-spec-template.md` 冒頭に記載しています。
+1. Apps Script エディタ左の **歯車（プロジェクトの設定）** を開く。
+2. **「`appsscript.json` マニフェスト ファイルをエディタで表示する」** にチェックを入れる（英語 UI では *Show "appsscript.json" manifest file in editor*）。
+3. 左のファイル一覧に `appsscript.json` が出るので、リポジトリの同名ファイルの内容を**すべて**貼り付けて保存する。
+4. 既に **サービス** から Sheets を手動追加している場合も、マニフェストと重複して問題ありません（どちらか一方があれば Advanced サービスは利用可能）。
+
+**clasp** を使う場合は、`scripts/create-spreadsheet.gs` を Apps Script プロジェクトに同期する運用に合わせてください。マニフェストはリポジトリ直下の `appsscript.json` を参照します。
+
+ブック上での**編集・ID・記述・共有**の実務は [`docs/google-sheets-guide.md`](docs/google-sheets-guide.md) を参照してください。
+
+## 注意事項
+
+- `createRequirementsSheet` をもう一度実行すると、確認なしで全シートが初期サンプルに戻る。すでに入力したブックがあるなら **再実行しない**（データが消える）。
+- **列やタブ構成を手で大きく変えると**、行追加・Markdown 書き出し・ID 同期などがスクリプトの前提とずれることがある。テンプレを変えたいときは [`scripts/create-spreadsheet.gs`](scripts/create-spreadsheet.gs) を編集してください。
+
