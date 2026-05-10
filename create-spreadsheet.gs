@@ -344,7 +344,7 @@ function applyUcListRelatedBrValidation_(ss) {
   var rule = vr
     ? SpreadsheetApp.newDataValidation()
         .requireValueInRange(vr, true)
-        .setAllowInvalid(true)
+        .setAllowInvalid(false)
         .build()
     : null;
 
@@ -378,7 +378,7 @@ function applyFrRelatedUcValidation_(ss) {
   var rule = vr
     ? SpreadsheetApp.newDataValidation()
         .requireValueInRange(vr, true)
-        .setAllowInvalid(true)
+        .setAllowInvalid(false)
         .build()
     : null;
 
@@ -420,7 +420,7 @@ function applyUcListActorValidation_(ss) {
 
   var rule = SpreadsheetApp.newDataValidation()
     .requireValueInRange(vr, true)
-    .setAllowInvalid(true)
+    .setAllowInvalid(false)
     .build();
 
   var lr = listSh.getLastRow();
@@ -453,7 +453,7 @@ function applyExternalIfPartnerValidation_(ss) {
 
   var rule = SpreadsheetApp.newDataValidation()
     .requireValueInRange(vr, true)
-    .setAllowInvalid(true)
+    .setAllowInvalid(false)
     .build();
 
   var lr = Math.min(ifSh.getLastRow(), 500);
