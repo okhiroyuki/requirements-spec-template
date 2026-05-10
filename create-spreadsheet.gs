@@ -9,7 +9,6 @@
  *   作成完了ダイアログにメニュー利用の注意（再読み込み）が表示される。反映後はメニュー「要求仕様書」から各機能が使える。
  *
  *   一覧・ステータス等の入力規則は SpreadsheetApp（従来の矢印ドロップダウン）。旧版は Sheets API で「テーブル」化していたが、型付き列と入力規則が両立しないため未使用。
- *   appsscript.json の Sheets サービスは任意（コンテナバインドのままでも問題なし）。
  *
  *   シートの列・項目・Markdown 書き出しなどテンプレートまわりを変えたいときは、このファイルを編集する。
  */
@@ -39,14 +38,11 @@ var ID_COUNTER_KEYS = [
 
 /**
  * 全シートをクリアし、初期サンプルを再展開する。実行のたびに同じ（確認ダイアログなし）。
- * 流れ: 旧 tbl_* 削除（データ消しを避けるため seed より前）→ setup → seed → 入力規則。
+ * 流れ: setup → seed → 入力規則。
  */
 function createRequirementsSheet() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   ss.setSpreadsheetTimeZone('Asia/Tokyo');
-
-  deleteExistingReqSpecTables_(ss.getId());
-  SpreadsheetApp.flush();
 
   // 既存の空白シートを削除（デフォルトの「シート1」）
   const defaultSheet = ss.getSheetByName('シート1');
@@ -609,48 +605,10 @@ function menuRefreshUcListActorValidation() {
   menuRefreshAllInputValidations();
 }
 
-/** 全シートに SpreadsheetApp の入力規則を付与（tbl 削除は createRequirementsSheet の先頭で済ませる）。 */
+/** 全シートに SpreadsheetApp の入力規則を付与 */
 function applyRequirementDropdowns_(ss) {
   applyLegacyDropdowns_(ss);
   applyAllReferenceValidations_(ss);
-}
-
-/**
- * 再実行時の同名テーブル衝突を避けるため、当スクリプトが付与したテーブル名を列挙して削除する。
- */
-function deleteExistingReqSpecTables_(spreadsheetId) {
-  var known = {
-    tbl_actor: true,
-    tbl_uc_list: true,
-    tbl_br: true,
-    tbl_fr: true,
-    tbl_nfr: true,
-    tbl_con: true,
-    tbl_if: true,
-    tbl_oi: true,
-    tbl_asm: true,
-    tbl_glossary: true,
-    tbl_changelog: true,
-    tbl_id_mgmt: true,
-  };
-  try {
-    var res = Sheets.Spreadsheets.get(spreadsheetId);
-    var dels = [];
-    (res.sheets || []).forEach(function (sheet) {
-      var tables = sheet.tables;
-      if (!tables || !tables.length) return;
-      tables.forEach(function (t) {
-        if (t.tableId && t.name && known[t.name]) {
-          dels.push({ deleteTable: { tableId: t.tableId } });
-        }
-      });
-    });
-    if (dels.length) {
-      Sheets.Spreadsheets.batchUpdate({ requests: dels }, spreadsheetId);
-    }
-  } catch (e) {
-    Logger.log('deleteExistingReqSpecTables_: ' + e);
-  }
 }
 
 /**
