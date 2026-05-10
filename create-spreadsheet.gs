@@ -218,7 +218,8 @@ function readActorMap_(ss) {
   if (!sh) return {};
   var lr = sh.getLastRow();
   if (lr < 2) return {};
-  var vals = sh.getRange(2, 1, lr, 2).getValues();
+  // getRange(r,c,numRows,numCols): 第3引数は終端行ではなく行数（2行目〜lr行目 → lr-1 行）
+  var vals = sh.getRange(2, 1, lr - 1, 2).getValues();
   var map = {};
   for (var i = 0; i < vals.length; i++) {
     var id = String(vals[i][0]).trim();
@@ -242,7 +243,7 @@ function readActorNameToIdMap_(ss) {
   if (!sh) return {};
   var lr = sh.getLastRow();
   if (lr < 2) return {};
-  var vals = sh.getRange(2, 1, lr, 2).getValues();
+  var vals = sh.getRange(2, 1, lr - 1, 2).getValues();
   var map = {};
   var i;
   for (i = 0; i < vals.length; i++) {
@@ -282,14 +283,15 @@ function getActorIdValidationRange_(ss) {
   if (!actorSh) return null;
   var lr = actorSh.getLastRow();
   if (lr < 2) return null;
-  var colA = actorSh.getRange(2, 1, lr, 1).getValues();
+  var colA = actorSh.getRange(2, 1, lr - 1, 1).getValues();
   var lastData = 1;
   var i;
   for (i = 0; i < colA.length; i++) {
     if (String(colA[i][0]).trim() !== '') lastData = i + 2;
   }
   if (lastData < 2) return null;
-  return actorSh.getRange(2, 1, lastData, 1);
+  var numRows = lastData - 2 + 1;
+  return actorSh.getRange(2, 1, numRows, 1);
 }
 
 /** 👤 アクターの「アクター名」列（B）のうち、ID 行と同じ範囲を返す（UC 一覧プルダウン用）。 */
@@ -297,7 +299,9 @@ function getActorNameValidationRange_(ss) {
   var idR = getActorIdValidationRange_(ss);
   if (!idR) return null;
   var sh = idR.getSheet();
-  return sh.getRange(idR.getRow(), 2, idR.getLastRow(), 2);
+  var startRow = idR.getRow();
+  var numRows = idR.getLastRow() - startRow + 1;
+  return sh.getRange(startRow, 2, numRows, 1);
 }
 
 /**
@@ -1052,7 +1056,7 @@ function scanMaxIdsFromBook(ss) {
     if (!sheet) return;
     var lr = sheet.getLastRow();
     if (lr < 2) return;
-    var vals = sheet.getRange(2, col, lr, col).getValues();
+    var vals = sheet.getRange(2, col, lr - 1, 1).getValues();
     for (var i = 0; i < vals.length; i++) {
       visitor(String(vals[i][0]).trim());
     }
