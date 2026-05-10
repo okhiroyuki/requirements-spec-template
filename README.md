@@ -10,7 +10,7 @@
 
 ```mermaid
 flowchart TB
-  script["scripts/create-spreadsheet.gs"]
+  script["create-spreadsheet.gs"]
   book["Googleスプレッドシート"]
   md["Markdownファイル"]
   script -->|"テンプレ生成"| book
@@ -22,37 +22,19 @@ flowchart TB
 
 ## リポジトリ構成
 
-### ドキュメント（[`docs/`](docs/)）
-
 | ファイル | 役割 |
 |----------|------|
-| [`docs/README.md`](docs/README.md) | ドキュメント一覧（このリポジトリの説明への入口）。 |
-| [`docs/google-sheets-guide.md`](docs/google-sheets-guide.md) | ブックの**編集・運用**、**ID**、**記述スタイル**、共有のコツなど。 |
-
-
-### スクリプト（[`scripts/`](scripts/)）とマニフェスト
-
-
-| ファイル | 役割 |
-|----------|------|
-| [`scripts/README.md`](scripts/README.md) | Apps Script ソースの一覧と貼り付け手順への入口。 |
-| [`scripts/create-spreadsheet.gs`](scripts/create-spreadsheet.gs) | シート一括生成、`createRequirementsSheet`、行追加パネル、Markdown 書き出し、ID 採番・再同期、メニュー登録。**テンプレ変更はこのファイル**。 |
+| [`google-sheets-guide.md`](google-sheets-guide.md) | ブックの**編集・運用**、**ID**、**記述スタイル**、共有のコツなど。 |
+| [`create-spreadsheet.gs`](create-spreadsheet.gs) | シート一括生成、`createRequirementsSheet`、行追加パネル、Markdown 書き出し、ID 採番・再同期、メニュー登録。**テンプレ変更はこのファイル**。 |
 | [`appsscript.json`](appsscript.json) | Advanced サービス **Google Sheets API（Sheets）** 用マニフェスト（テーブル化・チップ型ドロップダウンに推奨）。無くても動作するが、従来の矢印付きデータ検証にフォールバックする。 |
-
-
-### 参考（生成物のサンプル）
-
-
-| ファイル                                                         | 役割                                         |
-| ------------------------------------------------------------ | ------------------------------------------ |
-| `[output/requirements-spec.md](output/requirements-spec.md)` | メニューから書き出した Markdown の**サンプル例**。 |
+| [`sample-output-requirements-spec.md`](sample-output-requirements-spec.md) | メニューから書き出した Markdown の**サンプル例**。 |
 
 
 ## 初回セットアップ（Google スプレッドシート）
 
 1. 新しい [Google スプレッドシート](https://sheets.google.com/) を作成する。
 2. **拡張機能** → **Apps Script** を開く。
-3. エディタのデフォルトコードを削除し、[scripts/create-spreadsheet.gs](scripts/create-spreadsheet.gs) の内容を**すべて**貼り付けて保存する。
+3. エディタのデフォルトコードを削除し、[create-spreadsheet.gs](create-spreadsheet.gs) の内容を**すべて**貼り付けて保存する。
 4. **（推奨）** テーブル API でチップ型のステータス等を使うには、次のいずれかを行う。
   - **A.** マニフェストを使う（リポジトリと同じ設定）— 手順は下記 **「`appsscript.json` の入れ方」**。
   - **B.** 左の **サービス**（＋）から **Google Sheets API** の **Sheets** を追加して保存する。
@@ -69,12 +51,12 @@ flowchart TB
 3. 左のファイル一覧に `appsscript.json` が出るので、リポジトリの同名ファイルの内容を**すべて**貼り付けて保存する。
 4. 既に **サービス** から Sheets を手動追加している場合も、マニフェストと重複して問題ありません（どちらか一方があれば Advanced サービスは利用可能）。
 
-**clasp** を使う場合は、`scripts/create-spreadsheet.gs` を Apps Script プロジェクトに同期する運用に合わせてください。マニフェストはリポジトリ直下の `appsscript.json` を参照します。
+**clasp** を使う場合は、`create-spreadsheet.gs` とリポジトリ直下の `appsscript.json` をプロジェクトに同期する運用に合わせてください。
 
-ブック上での**編集・ID・記述・共有**の実務は [`docs/google-sheets-guide.md`](docs/google-sheets-guide.md) を参照してください。
+ブック上での**編集・ID・記述・共有**の実務は [`google-sheets-guide.md`](google-sheets-guide.md) を参照してください。
 
 ## 注意事項
 
 - `createRequirementsSheet` をもう一度実行すると、確認なしで全シートが初期サンプルに戻る。すでに入力したブックがあるなら **再実行しない**（データが消える）。
-- **列やタブ構成を手で大きく変えると**、行追加・Markdown 書き出し・ID 同期などがスクリプトの前提とずれることがある。テンプレを変えたいときは [`scripts/create-spreadsheet.gs`](scripts/create-spreadsheet.gs) を編集してください。
+- **列やタブ構成を手で大きく変えると**、行追加・Markdown 書き出し・ID 同期などがスクリプトの前提とずれることがある。テンプレを変えたいときは [`create-spreadsheet.gs`](create-spreadsheet.gs) を編集してください。
 
