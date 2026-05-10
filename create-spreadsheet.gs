@@ -878,7 +878,7 @@ function seedTemplateSampleRows_(ss) {
       ['ACT-002', '管理者', 'ユーザー管理・マスタ管理を行う担当者', '週次', ''],
       ['ACT-003', '既存受注管理システム', '本プロジェクトから連携するレガシー受注・在庫基盤など', 'リアルタイム', '🔗 IF-001 想定'],
       ['ACT-004', '会計システム', '請求データ連携などの経理・会計向け連携システム', '日次（深夜）', '🔗 IF-002 想定'],
-      ['ACT-005', '外部システム', 'SendGrid 等の SaaS／汎用外部 API・通知ベンダーを束ねて表すときの代表名', 'イベント駆動', '🔗 IF-003 想定'],
+      ['ACT-005', 'APIサーバー', 'SendGrid 等の外部 HTTP API／通知エンドポイントを束ねて表すときの代表名', 'イベント駆動', '🔗 IF-003 想定'],
     ];
     sh.getRange(2, 1, data.length, 5).setValues(data);
     sh.setRowHeights(1, sh.getLastRow(), 24);
@@ -975,7 +975,7 @@ function seedTemplateSampleRows_(ss) {
     data = [
       ['IF-001', '既存受注管理システム', 'OUT（送信）', 'REST API / JSON', 'リアルタイム', '受注データ', '顧客 IT 部門', ''],
       ['IF-002', '会計システム', 'OUT（送信）', 'CSV ファイル連携', '日次（深夜）', '請求データ', '顧客 経理部門', ''],
-      ['IF-003', '外部システム', 'OUT（送信）', 'REST API / JSON（例: SendGrid）', 'イベント駆動', '通知メール', '自社', 'API キー管理要'],
+      ['IF-003', 'APIサーバー', 'OUT（送信）', 'REST API / JSON（例: SendGrid）', 'イベント駆動', '通知メール', '自社', 'API キー管理要'],
     ];
     sh.getRange(2, 1, data.length, 8).setValues(data);
     sh.setRowHeights(1, sh.getLastRow(), 24);
