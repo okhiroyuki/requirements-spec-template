@@ -236,23 +236,46 @@ function extractActorIdFromCell_(text) {
   return m ? m[1] : '';
 }
 
+/** アクター名（B 列・重複は先勝ち）→ アクターID。Markdown 出力の名前解決用。 */
+function readActorNameToIdMap_(ss) {
+  var sh = ss.getSheetByName('👤 アクター');
+  if (!sh) return {};
+  var lr = sh.getLastRow();
+  if (lr < 2) return {};
+  var vals = sh.getRange(2, 1, lr, 2).getValues();
+  var map = {};
+  var i;
+  for (i = 0; i < vals.length; i++) {
+    var id = String(vals[i][0]).trim();
+    var name = String(vals[i][1] != null ? vals[i][1] : '').trim();
+    if (!id || !name) continue;
+    if (!(name in map)) map[name] = id;
+  }
+  return map;
+}
+
 /**
- * Markdown 出力用にアクター欄を「ACT-xxx（表示名）」へ解決する。ID が取れない場合は元テキストを返す。
+ * Markdown 出力用にアクター欄を「ACT-xxx（表示名）」へ解決する。
+ * ブックに入っているのが ID でもアクター名でもよい。同名が複数ある場合は先頭行の ID を使う。
  */
-function resolveActorLabelForMarkdown_(cellValue, actorMap) {
+function resolveActorLabelForMarkdown_(cellValue, actorMap, actorNameToId) {
   actorMap = actorMap || {};
+  actorNameToId = actorNameToId || {};
   var raw = String(cellValue != null ? cellValue : '').trim();
   if (!raw) return '';
   var id = extractActorIdFromCell_(raw);
-  if (!id) return raw;
-  var name = actorMap[id];
-  if (name) return id + '（' + name + '）';
+  if (id) {
+    var nm = actorMap[id];
+    if (nm) return id + '（' + nm + '）';
+    return raw;
+  }
+  id = actorNameToId[raw];
+  if (id) return id + '（' + raw + '）';
   return raw;
 }
 
 /**
- * 👤 アクター で実データがある A 列範囲（アクターID の入力規則用）。
- * @return {GoogleAppsScript.Spreadsheet.Range|null}
+ * 👤 アクター で実データがある A 列の最終行まで（行の決定用）。B 列入力規則は同じ行範囲を使う。
  */
 function getActorIdValidationRange_(ss) {
   var actorSh = ss.getSheetByName('👤 アクター');
@@ -269,12 +292,20 @@ function getActorIdValidationRange_(ss) {
   return actorSh.getRange(2, 1, lastData, 1);
 }
 
+/** 👤 アクターの「アクター名」列（B）のうち、ID 行と同じ範囲を返す（UC 一覧プルダウン用）。 */
+function getActorNameValidationRange_(ss) {
+  var idR = getActorIdValidationRange_(ss);
+  if (!idR) return null;
+  var sh = idR.getSheet();
+  return sh.getRange(idR.getRow(), 2, idR.getLastRow(), 2);
+}
+
 /**
- * 📖 UC一覧 のデータ行（UCID が UC-nnn）の「アクター」列に、👤 アクター のアクターID一覧から選ぶ入力規則を付与する（requireValueInRange）。
+ * 📖 UC一覧 の「アクター名」列に、👤 アクター の B 列から選ぶ入力規則を付与する。
  */
 function applyUcListActorValidation_(ss) {
   var listSh = ss.getSheetByName(UC_LIST_SHEET_NAME);
-  var vr = getActorIdValidationRange_(ss);
+  var vr = getActorNameValidationRange_(ss);
   if (!listSh || !vr) return;
 
   var rule = SpreadsheetApp.newDataValidation()
@@ -301,16 +332,16 @@ function applyUcListActorValidation_(ss) {
   }
 }
 
-/** メニュー用：📖 UC一覧 のアクター列の入力規則を再適用する（👤 アクターを増減したあとでも実行）。 */
+/** メニュー用：📖 UC一覧 のアクター名列の入力規則を再適用する（👤 アクターを増減したあとでも実行）。 */
 function menuRefreshUcListActorValidation() {
   try {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
-    if (!getActorIdValidationRange_(ss)) {
-      notifyUser_('👤 アクター にアクターIDの行がありません。', '入力規則');
+    if (!getActorNameValidationRange_(ss)) {
+      notifyUser_('👤 アクター にアクターIDとアクター名の行がありません。', '入力規則');
       return;
     }
     applyUcListActorValidation_(ss);
-    toastDone_('📖 UC一覧 のアクター列に 👤 アクター の一覧を参照する入力規則を付けました。', '入力規則');
+    toastDone_('📖 UC一覧 のアクター名列に 👤 アクター のアクター名を参照する入力規則を付けました。', '入力規則');
   } catch (e) {
     notifyUser_(String(e.message || e), 'エラー');
   }
@@ -362,7 +393,7 @@ function deleteExistingReqSpecTables_(spreadsheetId) {
 
 /**
  * 旧実装: Sheets API の addTable でチップ型ドロップダウンを付けていた。
- * 型付き列と SpreadsheetApp の入力規則（例: UC 一覧のアクター列）が両立しないため未使用。
+ * 型付き列と SpreadsheetApp の入力規則（例: UC 一覧のアクター名列）が両立しないため未使用。
  */
 function applyAllDataTables_(ss) {
   return false;
@@ -574,7 +605,7 @@ function setupUseCaseList(ss) {
   const sh = getOrCreateSheet(ss, UC_LIST_SHEET_NAME);
   sh.clearContents(); sh.clearFormats();
 
-  const listHeaders = ['UCID', 'アクター', 'ユースケース名', '関連BR', 'ステータス'];
+  const listHeaders = ['UCID', 'アクター名', 'ユースケース名', '関連BR', 'ステータス'];
   sh.getRange(1, 1, 1, listHeaders.length).setValues([listHeaders]);
   styleHeader(sh, 1, listHeaders.length);
 
@@ -590,7 +621,7 @@ function setupUseCaseDetail(ss) {
   const sh = getOrCreateSheet(ss, UC_DETAIL_SHEET_NAME);
   sh.clearContents(); sh.clearFormats();
 
-  writeUcDetailBlockAtRow_(sh, 1, 'UC-001', '受注データを登録する', 'ACT-001');
+  writeUcDetailBlockAtRow_(sh, 1, 'UC-001', '受注データを登録する', '一般ユーザー');
 
   setColWidths(sh, [160, 320, 160, 100, 100]);
   sh.setRowHeights(1, sh.getLastRow(), 24);
@@ -598,7 +629,7 @@ function setupUseCaseDetail(ss) {
 
 /**
  * UC 詳細ブロックを rowStart から書き込む（見出し〜代替フローまで）。
- * ucActorLabel は 📖 UC一覧 のアクター列と同様に「ACT-xxx」のアクターID（👤 アクター の一覧から選ぶ想定）。
+ * ucActorLabel は 📖 UC一覧 の「アクター名」列と同様に、👤 アクター の B 列と一致する名前を入れる。
  * skeletonOnly が true のときは項目見出しのみ（メニューからの追加）。本文・フロー番号は入れない。
  */
 function writeUcDetailBlockAtRow_(sh, rowStart, ucIdToken, ucName, ucActorLabel, skeletonOnly) {
@@ -827,9 +858,9 @@ function seedTemplateSampleRows_(ss) {
   sh = ss.getSheetByName(UC_LIST_SHEET_NAME);
   if (sh) {
     data = [
-      ['UC-001', 'ACT-001', '受注データを登録する', 'BR-001', '草案'],
-      ['UC-002', 'ACT-001', '受注一覧を照会する', 'BR-001', '草案'],
-      ['UC-003', 'ACT-002', 'ユーザーを管理する', '', '草案'],
+      ['UC-001', '一般ユーザー', '受注データを登録する', 'BR-001', '草案'],
+      ['UC-002', '一般ユーザー', '受注一覧を照会する', 'BR-001', '草案'],
+      ['UC-003', '管理者', 'ユーザーを管理する', '', '草案'],
     ];
     sh.getRange(2, 1, data.length, 5).setValues(data);
     sh.setRowHeights(1, sh.getLastRow(), 24);
@@ -1190,7 +1221,7 @@ function onOpen() {
   SpreadsheetApp.getUi()
     .createMenu('要求仕様書')
     .addItem('🔢 IDカウンタをブックから再同期', 'syncIdCountersFromBook')
-    .addItem('🔗 UC一覧 · アクター列の入力規則を更新', 'menuRefreshUcListActorValidation')
+    .addItem('🔗 UC一覧 · アクター名列の入力規則を更新', 'menuRefreshUcListActorValidation')
     .addItem('🧩 行を追加パネル（サイドバー）', 'showAddRowPanel')
     .addItem('📖 選択行の UC 詳細を追加／更新', 'menuAppendUcDetailFromListRow')
     .addSeparator()
@@ -1474,10 +1505,11 @@ function exportRequirementsToMarkdown() {
     const ucDetail = ss.getSheetByName(UC_DETAIL_SHEET_NAME);
     const legacyUcSheet = ss.getSheetByName('📖 ユースケース');
     const actorMap = readActorMap_(ss);
+    const actorNameToId = readActorNameToIdMap_(ss);
     if (ucList || ucDetail) {
-      md += parseUseCaseSheets_(ucList, ucDetail, actorMap);
+      md += parseUseCaseSheets_(ucList, ucDetail, actorMap, actorNameToId);
     } else if (legacyUcSheet) {
-      md += parseLegacyCombinedUseCaseSheet_(legacyUcSheet, actorMap);
+      md += parseLegacyCombinedUseCaseSheet_(legacyUcSheet, actorMap, actorNameToId);
     }
 
     const sheetsToProcess = [
@@ -1550,20 +1582,20 @@ function overviewScopeBulletBlock(sheet, startRow, endRow) {
 }
 
 /** 📖 UC一覧 + 📖 UC詳細 を Markdown にする */
-function parseUseCaseSheets_(listSheet, detailSheet, actorMap) {
+function parseUseCaseSheets_(listSheet, detailSheet, actorMap, actorNameToId) {
   let md = '## 📖 ユースケース\n\n';
   if (listSheet && listSheet.getLastRow() >= 1) {
     md += '### ▼ ユースケース一覧\n\n';
-    md += extractUcListTableAsMarkdown_(listSheet, actorMap) + '\n\n';
+    md += extractUcListTableAsMarkdown_(listSheet, actorMap, actorNameToId) + '\n\n';
   }
   if (detailSheet && detailSheet.getLastRow() > 0) {
-    md += parseUseCaseDetailSheet_(detailSheet, actorMap);
+    md += parseUseCaseDetailSheet_(detailSheet, actorMap, actorNameToId);
   }
   return md;
 }
 
 /** 📖 UC詳細 のみ（▼ UC-xxx ブロック・フロー） */
-function parseUseCaseDetailSheet_(sheet, actorMap) {
+function parseUseCaseDetailSheet_(sheet, actorMap, actorNameToId) {
   let md = '';
   const lastRow = sheet.getLastRow();
   const lastCol = sheet.getLastColumn();
@@ -1586,7 +1618,7 @@ function parseUseCaseDetailSheet_(sheet, actorMap) {
         }
         let metaVal = data[i][1];
         if (String(data[i][0]).trim() === 'アクター') {
-          metaVal = resolveActorLabelForMarkdown_(metaVal, actorMap);
+          metaVal = resolveActorLabelForMarkdown_(metaVal, actorMap, actorNameToId);
         }
         metaTable.push([data[i][0], metaVal]);
         i++;
@@ -1628,7 +1660,7 @@ function parseUseCaseDetailSheet_(sheet, actorMap) {
 }
 
 /** 旧テンプレ「📖 ユースケース」1シートに一覧と詳細が同居していた場合の書き出し */
-function parseLegacyCombinedUseCaseSheet_(sheet, actorMap) {
+function parseLegacyCombinedUseCaseSheet_(sheet, actorMap, actorNameToId) {
   let md = '## 📖 ユースケース\n\n';
   const lastRow = sheet.getLastRow();
   const lastCol = sheet.getLastColumn();
@@ -1647,7 +1679,7 @@ function parseLegacyCombinedUseCaseSheet_(sheet, actorMap) {
       while (i < data.length && String(data[i][0]).trim() !== '' && !String(data[i][0]).startsWith('▼')) {
         var listRow = data[i].slice(0, 5);
         if (tableData.length >= 1) {
-          listRow[1] = resolveActorLabelForMarkdown_(listRow[1], actorMap);
+          listRow[1] = resolveActorLabelForMarkdown_(listRow[1], actorMap, actorNameToId);
         }
         tableData.push(listRow);
         i++;
@@ -1667,7 +1699,7 @@ function parseLegacyCombinedUseCaseSheet_(sheet, actorMap) {
         }
         var legMetaVal = data[i][1];
         if (String(data[i][0]).trim() === 'アクター') {
-          legMetaVal = resolveActorLabelForMarkdown_(legMetaVal, actorMap);
+          legMetaVal = resolveActorLabelForMarkdown_(legMetaVal, actorMap, actorNameToId);
         }
         metaTable.push([data[i][0], legMetaVal]);
         i++;
@@ -1720,8 +1752,8 @@ function extractTableAsMarkdown(sheet, startRow, startCol, numCols) {
   return arrayToMarkdownTable(filteredData);
 }
 
-/** 📖 UC一覧 の Markdown（アクター列は出力時のみ ID＋名前に解決）。 */
-function extractUcListTableAsMarkdown_(sheet, actorMap) {
+/** 📖 UC一覧 の Markdown（アクター名列は出力時に ACT-xxx（名前）へ解決）。 */
+function extractUcListTableAsMarkdown_(sheet, actorMap, actorNameToId) {
   var startRow = 1;
   var startCol = 1;
   var numCols = 5;
@@ -1735,7 +1767,7 @@ function extractUcListTableAsMarkdown_(sheet, actorMap) {
   var j;
   for (j = 1; j < filteredData.length; j++) {
     var rowCopy = filteredData[j].slice();
-    rowCopy[1] = resolveActorLabelForMarkdown_(rowCopy[1], actorMap);
+    rowCopy[1] = resolveActorLabelForMarkdown_(rowCopy[1], actorMap, actorNameToId);
     filteredData[j] = rowCopy;
   }
   return arrayToMarkdownTable(filteredData);
