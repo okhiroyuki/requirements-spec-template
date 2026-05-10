@@ -27,7 +27,7 @@ flowchart TB
 | [`google-sheets-guide.md`](google-sheets-guide.md) | ブックの**編集・運用**、**ID**、**記述スタイル**、共有のコツなど。 |
 | [`create-spreadsheet.gs`](create-spreadsheet.gs) | シート一括生成、`createRequirementsSheet`、行追加パネル、Markdown 書き出し、ID 採番・再同期、メニュー登録。**テンプレ変更はこのファイル**。 |
 | [`appsscript.json`](appsscript.json) | Advanced サービス **Google Sheets API（Sheets）** 用マニフェスト（テーブル化・チップ型ドロップダウンに推奨）。無くても動作するが、従来の矢印付きデータ検証にフォールバックする。 |
-| [`sample-output-requirements-spec.md`](sample-output-requirements-spec.md) | メニューから書き出した Markdown の**サンプル例**。 |
+| [`output/requirements-spec.md`](output/requirements-spec.md) | メニューから書き出した Markdown の**サンプル例**。 |
 
 
 ## 初回セットアップ（Google スプレッドシート）
