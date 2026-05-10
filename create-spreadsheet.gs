@@ -16,12 +16,21 @@
 
 var UC_LIST_SHEET_NAME = '📖 UC一覧';
 var UC_DETAIL_SHEET_NAME = '📖 UC詳細';
+/** ビジネス（業務）ユースケース：事業側の業務単位。BR に紐づく。 */
+var BUC_SHEET_NAME = '📗 ビジネスユースケース';
 
 var ID_SHEET_NAME = '🔢 ID管理';
 
 /** 同期時に必ず行を用意するキー（テンプレに現れないキーは 0） */
 var ID_COUNTER_KEYS = [
-  'BR', 'FR', 'UC', 'IF', 'OI', 'ACT', 'ASM',
+  'BR',
+  'BUC',
+  'FR',
+  'UC',
+  'IF',
+  'OI',
+  'ACT',
+  'ASM',
   'NFR',
   'CON'
 ];
@@ -47,6 +56,7 @@ function createRequirementsSheet() {
   setupOverview(ss);
   setupActors(ss);
   setupBusinessReqs(ss);
+  setupBusinessUseCases(ss);
   setupUseCaseList(ss);
   setupUseCaseDetail(ss);
   setupFunctionalReqs(ss);
@@ -107,6 +117,7 @@ function reorderReqSpecSheetTabs_(ss) {
     '📋 概要',
     '👤 アクター',
     '🎯 ビジネス要求',
+    BUC_SHEET_NAME,
     UC_LIST_SHEET_NAME,
     UC_DETAIL_SHEET_NAME,
     '⚙️ 機能要求',
@@ -402,10 +413,45 @@ function applyFrRelatedUcValidation_(ss) {
   }
 }
 
+/**
+ * 📗 ビジネスユースケース の「関連BR」列に、🎯 ビジネス要求の BR-ID を選ぶ入力規則を付与する。
+ */
+function applyBucRelatedBrValidation_(ss) {
+  var bucSh = ss.getSheetByName(BUC_SHEET_NAME);
+  if (!bucSh) return;
+  var vr = getBrIdListRange_(ss);
+  var rule = vr
+    ? SpreadsheetApp.newDataValidation()
+        .requireValueInRange(vr, true)
+        .setAllowInvalid(false)
+        .build()
+    : null;
+
+  var lr = Math.min(bucSh.getLastRow(), 500);
+  var r;
+  try {
+    for (r = 2; r <= lr; r++) {
+      var idCell = String(bucSh.getRange(r, 1).getValue()).trim();
+      if (!/^BUC-\d+$/.test(idCell)) continue;
+      var cell = bucSh.getRange(r, 4);
+      if (rule) cell.setDataValidation(rule);
+      else cell.clearDataValidation();
+    }
+  } catch (e) {
+    var msg = String(e.message || e);
+    if (msg.indexOf('型付き') !== -1 || /typed column/i.test(msg)) {
+      Logger.log('applyBucRelatedBrValidation_: skip typed table column — ' + msg);
+      return;
+    }
+    throw e;
+  }
+}
+
 /** アクター名・関連 BR／UC・外部 IF 連携先など、別シート参照の入力規則をまとめて付与 */
 function applyAllReferenceValidations_(ss) {
   applyUcListActorValidation_(ss);
   applyUcListRelatedBrValidation_(ss);
+  applyBucRelatedBrValidation_(ss);
   applyFrRelatedUcValidation_(ss);
   applyExternalIfPartnerValidation_(ss);
 }
@@ -745,6 +791,23 @@ function setupBusinessReqs(ss) {
 }
 
 // ─────────────────────────────────────────────
+// タブ 3b: 📗 ビジネスユースケース
+// ─────────────────────────────────────────────
+
+function setupBusinessUseCases(ss) {
+  var sh = getOrCreateSheet(ss, BUC_SHEET_NAME);
+  sh.clearContents();
+  sh.clearFormats();
+
+  var headers = ['BUCID', '業務名', '業務の概要', '関連BR'];
+  sh.getRange(1, 1, 1, headers.length).setValues([headers]);
+  styleHeader(sh, 1, headers.length);
+
+  setColWidths(sh, [88, 200, 380, 100]);
+  sh.setRowHeights(1, 1, 24);
+}
+
+// ─────────────────────────────────────────────
 // タブ 4a: 📖 UC一覧
 // ─────────────────────────────────────────────
 
@@ -1004,6 +1067,18 @@ function seedTemplateSampleRows_(ss) {
     sh.setRowHeights(1, sh.getLastRow(), 24);
   }
 
+  sh = ss.getSheetByName(BUC_SHEET_NAME);
+  if (sh) {
+    data = [
+      ['BUC-001', '受注登録・検証業務', '顧客からの注文を受け、内容を精査して受理する仕事', 'BR-001'],
+      ['BUC-002', '受注承認・出荷連携業務', '受理した注文を承認し、出荷工程へデータを送る仕事', 'BR-002'],
+      ['BUC-003', '納期回答業務', '在庫と配送状況を確認し、顧客へ納期を伝える仕事', 'BR-003'],
+    ];
+    sh.getRange(2, 1, data.length, 4).setValues(data);
+    sh.setRowHeights(1, sh.getLastRow(), 24);
+    sh.getRange(2, 3, data.length, 1).setWrap(true);
+  }
+
   sh = ss.getSheetByName(UC_LIST_SHEET_NAME);
   if (sh) {
     data = [
@@ -1212,6 +1287,11 @@ function scanMaxIdsFromBook(ss) {
     if (m) bump('BR', m[1]);
   });
 
+  scanColumn(BUC_SHEET_NAME, 1, function (text) {
+    var m = text.match(/^BUC-(\d+)$/);
+    if (m) bump('BUC', m[1]);
+  });
+
   scanColumn('⚙️ 機能要求', 1, function (text) {
     var m = text.match(/^FR-(\d+)$/);
     if (m) bump('FR', m[1]);
@@ -1306,7 +1386,18 @@ function formatRequirementId(counterKey, num) {
   if (isNaN(n) || n < 1) throw new Error('不正な連番: ' + num);
   var s = String(n);
   var pad = s.length < 3 ? ('000' + s).slice(-3) : s;
-  var simple = { BR: 'BR-', FR: 'FR-', UC: 'UC-', IF: 'IF-', OI: 'OI-', ACT: 'ACT-', ASM: 'ASM-', CON: 'CON-', NFR: 'NFR-' };
+  var simple = {
+    BR: 'BR-',
+    BUC: 'BUC-',
+    FR: 'FR-',
+    UC: 'UC-',
+    IF: 'IF-',
+    OI: 'OI-',
+    ACT: 'ACT-',
+    ASM: 'ASM-',
+    CON: 'CON-',
+    NFR: 'NFR-',
+  };
   var p = simple[counterKey];
   if (!p) throw new Error('不正なキー: ' + counterKey);
   return p + pad;
@@ -1350,6 +1441,7 @@ function getAddRowPanelHtml_() {
       '<p class="desc">表の末尾に 1 行追加し、ID を自動採番します（ボタンはシートタブと同じ並び）。パネルを開いたまま連続で押せます。</p>' +
       btn('menuAddACT', 'ACT · 👤 アクター') +
       btn('menuAddBR', 'BR · 🎯 ビジネス要求') +
+      btn('menuAddBUC', 'BUC · 📗 ビジネスユースケース') +
       btn('menuAddUC', 'UC · 📖 UC一覧') +
       btn('menuAddFR', 'FR · ⚙️ 機能要求') +
       btn('menuAddNFR', 'NFR · 🔒 非機能要求') +
@@ -1376,6 +1468,23 @@ function onOpen() {
     .addSeparator()
     .addItem('📝 Markdown を作成（表示・コピー）', 'exportRequirementsToMarkdown')
     .addToUi();
+}
+
+function menuAddBUC() {
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var id = issueNextId(ss, 'BUC');
+    var sh = ss.getSheetByName(BUC_SHEET_NAME);
+    if (!sh) {
+      notifyUser_('シート「' + BUC_SHEET_NAME + '」がありません。createRequirementsSheet を実行してください。', '行を追加');
+      return;
+    }
+    sh.appendRow([id, '', '', '']);
+    sh.getRange(sh.getLastRow(), 3).setWrap(true);
+    applyAllReferenceValidations_(ss);
+  } catch (e) {
+    notifyUser_(String(e.message || e), 'エラー');
+  }
 }
 
 function menuAddBR() {
@@ -1667,6 +1776,7 @@ function exportRequirementsToMarkdown() {
     const sheetsToProcess = [
       { name: '👤 アクター', startRow: 1, cols: 5 },
       { name: '🎯 ビジネス要求', startRow: 1, cols: 7 },
+      { name: BUC_SHEET_NAME, startRow: 1, cols: 4 },
       { name: '⚙️ 機能要求', startRow: 1, cols: 11 },
       { name: '🔒 非機能要求', startRow: 1, cols: 8 },
       { name: '🚧 制約条件', startRow: 1, cols: 6 },
