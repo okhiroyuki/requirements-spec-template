@@ -26,7 +26,7 @@ flowchart TB
 |----------|------|
 | [`google-sheets-guide.md`](google-sheets-guide.md) | ブックの**編集・運用**、**ID**、**記述スタイル**、共有のコツなど。 |
 | [`create-spreadsheet.gs`](create-spreadsheet.gs) | シート一括生成、`createRequirementsSheet`、行追加パネル、Markdown 書き出し、ID 採番・再同期、メニュー登録。**テンプレ変更はこのファイル**。 |
-| [`appsscript.json`](appsscript.json) | Advanced サービス **Google Sheets API（Sheets）** 用マニフェスト（テーブル化・チップ型ドロップダウンに推奨）。無くても動作するが、従来の矢印付きデータ検証にフォールバックする。 |
+| [`appsscript.json`](appsscript.json) | **`Sheets`**（v4）は、過去バージョンで付いた **テーブル（tbl_*）を削除する**ために使う（[`deleteExistingReqSpecTables_`](create-spreadsheet.gs)）。コンテナ側で無効でもテンプレは動くが、その場合は tbl が残ったブックを手動でテーブル解除する必要があることがある。 |
 | [`output/requirements-spec.md`](output/requirements-spec.md) | メニューから書き出した Markdown の**サンプル例**。 |
 
 
@@ -35,10 +35,7 @@ flowchart TB
 1. 新しい [Google スプレッドシート](https://sheets.google.com/) を作成する。
 2. **拡張機能** → **Apps Script** を開く。
 3. エディタのデフォルトコードを削除し、[create-spreadsheet.gs](create-spreadsheet.gs) の内容を**すべて**貼り付けて保存する。
-4. **（推奨）** テーブル API でチップ型のステータス等を使うには、次のいずれかを行う。
-  - **A.** マニフェストを使う（リポジトリと同じ設定）— 手順は下記 **「`appsscript.json` の入れ方」**。
-  - **B.** 左の **サービス**（＋）から **Google Sheets API** の **Sheets** を追加して保存する。
-  - どちらも未実施でもスクリプトは動くが、従来の矢印付きデータ検証にフォールバックする。
+4. **（推奨）** [`appsscript.json`](appsscript.json) に **Sheets Advanced サービス**を含める（リポジトリ同梱どおり）、または Apps Script で **サービスから Sheets（v4）を追加**する。`createRequirementsSheet` 実行時に **過去テンプレのテーブル（tbl_*）を API で取り除く**のに使う。ドロップダウン本体はすべて **標準の入力規則**（矢印）で統一されている。**Sheets が無効**でも動作するが、いったんテーブル化されたブックでは tbl の残骸が残る場合があるので、新規作成か手動でテーブルをオフにする。
 5. 関数 `createRequirementsSheet` を選び、**実行**する（初回は権限の承認が必要）。**実行するたびに**各シートが初期サンプルで上書きされる（確認ダイアログなし）。入力を残したままにしたい場合は **`createRequirementsSheet` を再実行しない**こと。
 6. スプレッドシートに戻ると、ガイドに記載されたタブ（📋 概要、👤 アクター、🎯 ビジネス要求 など）ができる。**完了ダイアログ**に、メニュー「要求仕様書」を出すための再読み込み案内が含まれる。
 

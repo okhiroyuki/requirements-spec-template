@@ -8,8 +8,8 @@
  *   4. 関数「createRequirementsSheet」を選択して実行（実行のたびに全シートを初期サンプルで上書きする）
  *   作成完了ダイアログにメニュー利用の注意（再読み込み）が表示される。反映後はメニュー「要求仕様書」から各機能が使える。
  *
- *   チップ型ドロップダウンは Google スプレッドシートの「テーブル」API で設定する。
- *   リポジトリの appsscript.json をプロジェクトに含めるか、エディタで「サービス」から Google Sheets API（Sheets）を追加すること。
+ *   一覧・ステータス等の入力規則は SpreadsheetApp（従来の矢印ドロップダウン）。旧版は Sheets API で「テーブル」化していたが、型付き列と入力規則が両立しないため未使用。
+ *   appsscript.json の Sheets サービスは任意（コンテナバインドのままでも問題なし）。
  *
  *   シートの列・項目・Markdown 書き出しなどテンプレートまわりを変えたいときは、このファイルを編集する。
  */
@@ -28,7 +28,7 @@ var ID_COUNTER_KEYS = [
 
 /**
  * 全シートをクリアし、初期サンプルを再展開する。実行のたびに同じ（確認ダイアログなし）。
- * addTable のあとにサンプル行を書く（テーブル変換でセルが空に見える問題を避ける）。
+ * 入力規則付けのあとサンプル行を入れる（applyRequirementDropdowns_ → seed → UC アクター検証を再適用）。
  */
 function createRequirementsSheet() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -63,12 +63,11 @@ function createRequirementsSheet() {
 
   SpreadsheetApp.flush();
 
-  applyRequirementDropdowns_(ss);
+  seedTemplateSampleRows_(ss);
   SpreadsheetApp.flush();
 
-  seedTemplateSampleRows_(ss);
-
-  applyUcListActorValidation_(ss);
+  applyRequirementDropdowns_(ss);
+  SpreadsheetApp.flush();
 
   syncIdCountersFromBookCore(ss);
 
@@ -198,7 +197,7 @@ function setColWidths(sheet, widths) {
   widths.forEach((w, i) => sheet.setColumnWidth(i + 1, w));
 }
 
-/** ドロップダウン検証（チップ未適用セル・フォールバック用の従来スタイル） */
+/** ドロップダウン検証（一覧から選択する入力規則） */
 function setDropdown(sheet, row, col, values) {
   const rule = SpreadsheetApp.newDataValidation()
     .requireValueInList(values, true)
@@ -268,15 +267,12 @@ function getActorIdValidationRange_(ss) {
 }
 
 /**
- * 📖 UC一覧 のデータ行（UCID が UC-nnn）の「アクター」列に、👤 アクター のアクターID一覧から選ぶ入力規則を付与する。
- * テーブル API でシートを「テーブル」化している場合、当列は型付き列となり SpreadsheetApp の入力規則は付与できない（スキップする）。
+ * 📖 UC一覧 のデータ行（UCID が UC-nnn）の「アクター」列に、👤 アクター のアクターID一覧から選ぶ入力規則を付与する（requireValueInRange）。
  */
 function applyUcListActorValidation_(ss) {
   var listSh = ss.getSheetByName(UC_LIST_SHEET_NAME);
   var vr = getActorIdValidationRange_(ss);
   if (!listSh || !vr) return;
-
-  if (reqSpecUsesChipDropdownTables_()) return;
 
   var rule = SpreadsheetApp.newDataValidation()
     .requireValueInRange(vr, true)
@@ -306,13 +302,6 @@ function applyUcListActorValidation_(ss) {
 function menuRefreshUcListActorValidation() {
   try {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
-    if (reqSpecUsesChipDropdownTables_()) {
-      notifyUser_(
-        'このブックは「テーブル」化（チップ型ドロップダウン）されています。Google スプレッドシートの制限で、📖 UC一覧 の「アクター」列のような**型付き列**には入力規則を付けられません。**`ACT-001` 形式を手入力**し、**👤 アクター** の A 列と揃えてください。Markdown 書き出しでは従来どおり ID＋名前に展開されます。',
-        '入力規則'
-      );
-      return;
-    }
     if (!getActorIdValidationRange_(ss)) {
       notifyUser_('👤 アクター にアクターIDの行がありません。', '入力規則');
       return;
@@ -324,49 +313,10 @@ function menuRefreshUcListActorValidation() {
   }
 }
 
-/** テーブル API でチップ型ドロップダウンを付けた場合に立てるフラグ（行追加時は従来検証のみ付与するため） */
-var REQSPEC_CHIP_DV_PROP = 'REQSPEC_DV_CHIP';
-
-function reqSpecUsesChipDropdownTables_() {
-  try {
-    return PropertiesService.getDocumentProperties().getProperty(REQSPEC_CHIP_DV_PROP) === '1';
-  } catch (e) {
-    return false;
-  }
-}
-
-/** ONE_OF_LIST（Sheets API のテーブル列ドロップダウン用） */
-function tableListCondition_(values) {
-  return {
-    type: 'ONE_OF_LIST',
-    values: values.map(function (v) {
-      return { userEnteredValue: String(v) };
-    }),
-  };
-}
-
-function tableColText_(columnIndex, columnName) {
-  return { columnIndex: columnIndex, columnName: columnName, columnType: 'TEXT' };
-}
-
-function tableColDropdown_(columnIndex, columnName, values) {
-  return {
-    columnIndex: columnIndex,
-    columnName: columnName,
-    columnType: 'DROPDOWN',
-    dataValidationRule: { condition: tableListCondition_(values) },
-  };
-}
-
-/** createRequirementsSheet の末尾で呼ぶ。テーブル API が使えればチップ型、だめなときは setDropdown。 */
+/** 既存のテーブル（tbl_*）を外し、全シートを SpreadsheetApp の入力規則に統一する。 */
 function applyRequirementDropdowns_(ss) {
-  var props = PropertiesService.getDocumentProperties();
-  props.deleteProperty(REQSPEC_CHIP_DV_PROP);
-  if (applyAllDataTables_(ss)) {
-    props.setProperty(REQSPEC_CHIP_DV_PROP, '1');
-  } else {
-    applyLegacyDropdowns_(ss);
-  }
+  deleteExistingReqSpecTables_(ss.getId());
+  applyLegacyDropdowns_(ss);
   applyUcListActorValidation_(ss);
 }
 
@@ -409,343 +359,14 @@ function deleteExistingReqSpecTables_(spreadsheetId) {
 }
 
 /**
- * Google Sheets API の「テーブル」で矩形データシートを一括作成（📋 概要・📖 UC詳細を除く）。
- * Advanced サービス「Sheets」が無効な場合は false。
+ * 旧実装: Sheets API の addTable でチップ型ドロップダウンを付けていた。
+ * 型付き列と SpreadsheetApp の入力規則（例: UC 一覧のアクター列）が両立しないため未使用。
  */
 function applyAllDataTables_(ss) {
-  if (typeof Sheets === 'undefined') {
-    return false;
-  }
-  var id = ss.getId();
-  deleteExistingReqSpecTables_(id);
-  var requests = [];
-
-  var actorSh = ss.getSheetByName('👤 アクター');
-  if (actorSh) {
-    requests.push({
-      addTable: {
-        table: {
-          name: 'tbl_actor',
-          range: {
-            sheetId: actorSh.getSheetId(),
-            startRowIndex: 0,
-            endRowIndex: 400,
-            startColumnIndex: 0,
-            endColumnIndex: 5,
-          },
-          columnProperties: [
-            tableColText_(0, 'アクターID'),
-            tableColText_(1, 'アクター名'),
-            tableColText_(2, '説明・ロール'),
-            tableColText_(3, '利用頻度'),
-            tableColText_(4, '備考'),
-          ],
-        },
-      },
-    });
-  }
-
-  var ucListSh = ss.getSheetByName(UC_LIST_SHEET_NAME);
-  if (ucListSh) {
-    requests.push({
-      addTable: {
-        table: {
-          name: 'tbl_uc_list',
-          range: {
-            sheetId: ucListSh.getSheetId(),
-            startRowIndex: 0,
-            endRowIndex: 500,
-            startColumnIndex: 0,
-            endColumnIndex: 5,
-          },
-          columnProperties: [
-            tableColText_(0, 'UCID'),
-            tableColText_(1, 'アクター'),
-            tableColText_(2, 'ユースケース名'),
-            tableColText_(3, '関連BR'),
-            tableColDropdown_(4, 'ステータス', ['草案', 'レビュー中', '合意済', '保留', '廃止']),
-          ],
-        },
-      },
-    });
-  }
-
-  var br = ss.getSheetByName('🎯 ビジネス要求');
-  if (br) {
-    requests.push({
-      addTable: {
-        table: {
-          name: 'tbl_br',
-          range: {
-            sheetId: br.getSheetId(),
-            startRowIndex: 0,
-            endRowIndex: 500,
-            startColumnIndex: 0,
-            endColumnIndex: 7,
-          },
-          columnProperties: [
-            tableColText_(0, '要求ID'),
-            tableColText_(1, 'ビジネス要求（1文）'),
-            tableColText_(2, '背景・理由'),
-            tableColDropdown_(3, '優先度', ['Must', 'Should', 'Could']),
-            tableColText_(4, '成功指標'),
-            tableColText_(5, '顧客コメント ✏️'),
-            tableColDropdown_(6, 'ステータス', ['草案', 'レビュー中', '合意済', '保留', '廃止']),
-          ],
-        },
-      },
-    });
-  }
-
-  var fr = ss.getSheetByName('⚙️ 機能要求');
-  if (fr) {
-    requests.push({
-      addTable: {
-        table: {
-          name: 'tbl_fr',
-          range: {
-            sheetId: fr.getSheetId(),
-            startRowIndex: 0,
-            endRowIndex: 500,
-            startColumnIndex: 0,
-            endColumnIndex: 11,
-          },
-          columnProperties: [
-            tableColText_(0, '要求ID'),
-            tableColText_(1, '機能名'),
-            tableColText_(2, '関連UC'),
-            tableColText_(3, '要求記述（条件＋主語＋動作）'),
-            tableColText_(4, '受け入れ基準①'),
-            tableColText_(5, '受け入れ基準②'),
-            tableColText_(6, '受け入れ基準③'),
-            tableColDropdown_(7, '優先度', ['Must', 'Should', 'Could']),
-            tableColText_(8, '顧客コメント ✏️'),
-            tableColDropdown_(9, '合意ステータス', ['草案', 'レビュー中', '合意済', '差し戻し', '廃止']),
-            tableColText_(10, '備考'),
-          ],
-        },
-      },
-    });
-  }
-
-  var nfr = ss.getSheetByName('🔒 非機能要求');
-  if (nfr) {
-    requests.push({
-      addTable: {
-        table: {
-          name: 'tbl_nfr',
-          range: {
-            sheetId: nfr.getSheetId(),
-            startRowIndex: 0,
-            endRowIndex: 500,
-            startColumnIndex: 0,
-            endColumnIndex: 8,
-          },
-          columnProperties: [
-            tableColText_(0, '要求ID'),
-            tableColDropdown_(1, 'カテゴリ', ['性能', '可用性', 'セキュリティ', '保守性', 'UX']),
-            tableColText_(2, '項目名'),
-            tableColText_(3, '要求値（数値必須）'),
-            tableColText_(4, '測定条件'),
-            tableColText_(5, '測定方法'),
-            tableColText_(6, '顧客コメント ✏️'),
-            tableColDropdown_(7, '合意ステータス', ['草案', 'レビュー中', '合意済', '差し戻し', '廃止']),
-          ],
-        },
-      },
-    });
-  }
-
-  var con = ss.getSheetByName('🚧 制約条件');
-  if (con) {
-    requests.push({
-      addTable: {
-        table: {
-          name: 'tbl_con',
-          range: {
-            sheetId: con.getSheetId(),
-            startRowIndex: 0,
-            endRowIndex: 500,
-            startColumnIndex: 0,
-            endColumnIndex: 6,
-          },
-          columnProperties: [
-            tableColText_(0, '制約ID'),
-            tableColDropdown_(1, 'カテゴリ', ['技術', 'ビジネス', '法規制', '運用']),
-            tableColText_(2, '制約内容'),
-            tableColText_(3, '理由'),
-            tableColText_(4, '顧客コメント ✏️'),
-            tableColDropdown_(5, 'ステータス', ['草案', '合意済', '廃止']),
-          ],
-        },
-      },
-    });
-  }
-
-  var extif = ss.getSheetByName('🔗 外部IF');
-  if (extif) {
-    requests.push({
-      addTable: {
-        table: {
-          name: 'tbl_if',
-          range: {
-            sheetId: extif.getSheetId(),
-            startRowIndex: 0,
-            endRowIndex: 500,
-            startColumnIndex: 0,
-            endColumnIndex: 8,
-          },
-          columnProperties: [
-            tableColText_(0, 'IF-ID'),
-            tableColText_(1, '連携先システム'),
-            tableColDropdown_(2, '方向', ['IN（受信）', 'OUT（送信）', '双方向']),
-            tableColText_(3, 'プロトコル／形式'),
-            tableColText_(4, '頻度'),
-            tableColText_(5, 'データ概要'),
-            tableColText_(6, '担当部署'),
-            tableColText_(7, '備考'),
-          ],
-        },
-      },
-    });
-  }
-
-  var oi = ss.getSheetByName('❓ 未解決事項');
-  if (oi) {
-    requests.push({
-      addTable: {
-        table: {
-          name: 'tbl_oi',
-          range: {
-            sheetId: oi.getSheetId(),
-            startRowIndex: 0,
-            endRowIndex: 500,
-            startColumnIndex: 0,
-            endColumnIndex: 7,
-          },
-          columnProperties: [
-            tableColText_(0, 'Issue-ID'),
-            tableColText_(1, '内容'),
-            tableColText_(2, '影響する要求ID'),
-            tableColText_(3, '担当者'),
-            tableColText_(4, '期限'),
-            tableColText_(5, '回答・決定内容'),
-            tableColDropdown_(6, 'ステータス', ['未解決', '解決済', '保留', '取り下げ']),
-          ],
-        },
-      },
-    });
-  }
-
-  var asmSh = ss.getSheetByName('📌 前提条件');
-  if (asmSh) {
-    requests.push({
-      addTable: {
-        table: {
-          name: 'tbl_asm',
-          range: {
-            sheetId: asmSh.getSheetId(),
-            startRowIndex: 0,
-            endRowIndex: 200,
-            startColumnIndex: 0,
-            endColumnIndex: 3,
-          },
-          columnProperties: [
-            tableColText_(0, '前提ID'),
-            tableColText_(1, '前提条件'),
-            tableColText_(2, 'リスク（崩れた場合の影響）'),
-          ],
-        },
-      },
-    });
-  }
-
-  var gloSh = ss.getSheetByName('📚 用語集');
-  if (gloSh) {
-    requests.push({
-      addTable: {
-        table: {
-          name: 'tbl_glossary',
-          range: {
-            sheetId: gloSh.getSheetId(),
-            startRowIndex: 0,
-            endRowIndex: 500,
-            startColumnIndex: 0,
-            endColumnIndex: 4,
-          },
-          columnProperties: [
-            tableColText_(0, '用語'),
-            tableColText_(1, '定義'),
-            tableColText_(2, '類義語・注意'),
-            tableColText_(3, '初出箇所'),
-          ],
-        },
-      },
-    });
-  }
-
-  var chSh = ss.getSheetByName('✅ 変更履歴');
-  if (chSh) {
-    requests.push({
-      addTable: {
-        table: {
-          name: 'tbl_changelog',
-          range: {
-            sheetId: chSh.getSheetId(),
-            startRowIndex: 0,
-            endRowIndex: 300,
-            startColumnIndex: 0,
-            endColumnIndex: 5,
-          },
-          columnProperties: [
-            tableColText_(0, 'バージョン'),
-            tableColText_(1, '日付'),
-            tableColText_(2, '変更者'),
-            tableColText_(3, '変更内容'),
-            tableColText_(4, '影響箇所'),
-          ],
-        },
-      },
-    });
-  }
-
-  var idMgmtSh = ss.getSheetByName(ID_SHEET_NAME);
-  if (idMgmtSh) {
-    requests.push({
-      addTable: {
-        table: {
-          name: 'tbl_id_mgmt',
-          range: {
-            sheetId: idMgmtSh.getSheetId(),
-            startRowIndex: 0,
-            endRowIndex: 80,
-            startColumnIndex: 0,
-            endColumnIndex: 3,
-          },
-          columnProperties: [
-            tableColText_(0, 'キー'),
-            tableColText_(1, '最終発番（数値）'),
-            tableColText_(2, '説明'),
-          ],
-        },
-      },
-    });
-  }
-
-  if (requests.length === 0) {
-    return false;
-  }
-
-  try {
-    Sheets.Spreadsheets.batchUpdate({ requests: requests }, id);
-    return true;
-  } catch (e) {
-    Logger.log('applyAllDataTables_: ' + e);
-    return false;
-  }
+  return false;
 }
 
-/** Advanced サービスが無い／テーブル作成に失敗したときの従来ドロップダウン一式 */
+/** 各データシートのドロップダウン入力規則を一括付与 */
 function applyLegacyDropdowns_(ss) {
   var lrCap = 500;
 
@@ -804,7 +425,7 @@ function applyLegacyDropdowns_(ss) {
   applyUcListDropdownsLegacy_(ss);
 }
 
-/** 📖 UC一覧のデータ行にステータス検証（テーブル API 失敗時のみ） */
+/** 📖 UC一覧のデータ行にステータス列の入力規則 */
 function applyUcListDropdownsLegacy_(ss) {
   var sh = ss.getSheetByName(UC_LIST_SHEET_NAME);
   if (!sh) return;
@@ -819,7 +440,7 @@ function applyUcListDropdownsLegacy_(ss) {
   }
 }
 
-/** ステータス列の文字色のみを条件付き書式で付与する（セル背景は付けず、チップ表示が埋もれないようにする） */
+/** ステータス列の文字色のみを条件付き書式で付与する（セル背景は付けない） */
 function addStatusFormatting(sheet, col, lastRow) {
   const range = sheet.getRange(2, col, lastRow - 1, 1);
   const rules = [
@@ -842,7 +463,7 @@ function addStatusFormatting(sheet, col, lastRow) {
   sheet.setConditionalFormatRules(cfRules);
 }
 
-/** テーブル作成後に付与（テーブル API と競合しにくいよう setup から分離） */
+/** ドロップダウン適用後に条件付き書式（ステータス列の前景色）を付与 */
 function applyStatusFormattingAfterTables_(ss) {
   var sh;
   sh = ss.getSheetByName('🎯 ビジネス要求');
@@ -1170,7 +791,7 @@ function setupChangeLog(ss) {
 }
 
 // ─────────────────────────────────────────────
-// テーブル addTable 後にサンプル行を入れる（API が先に通るとセルが空に見える対策）
+// setup・入力規則のあとにサンプル行を入れる
 // ─────────────────────────────────────────────
 
 function seedTemplateSampleRows_(ss) {
@@ -1328,7 +949,7 @@ function seedTemplateSampleRows_(ss) {
   }
 }
 
-/** 🔢 ID管理：ヘッダのみ（テーブル化のあと syncIdCountersFromBookCore で中身を埋める） */
+/** 🔢 ID管理：ヘッダのみ（seed 後 syncIdCountersFromBookCore で中身を埋める） */
 function setupIdSheetHeaderOnly_(ss) {
   var sh = getOrCreateSheet(ss, ID_SHEET_NAME);
   sh.clearContents();
@@ -1586,10 +1207,8 @@ function menuAddBR() {
     }
     sh.appendRow([id, '', '', 'Must', '', '', '草案']);
     var row = sh.getLastRow();
-    if (!reqSpecUsesChipDropdownTables_()) {
-      setDropdown(sh, row, 4, ['Must', 'Should', 'Could']);
-      setDropdown(sh, row, 7, ['草案', 'レビュー中', '合意済', '保留', '廃止']);
-    }
+    setDropdown(sh, row, 4, ['Must', 'Should', 'Could']);
+    setDropdown(sh, row, 7, ['草案', 'レビュー中', '合意済', '保留', '廃止']);
     sh.getRange(row, 6).setBackground('#fffde7');
   } catch (e) {
     notifyUser_(String(e.message || e), 'エラー');
@@ -1607,10 +1226,8 @@ function menuAddFR() {
     }
     sh.appendRow([id, '', '', '', '', '', '', 'Must', '', '草案', '']);
     var row = sh.getLastRow();
-    if (!reqSpecUsesChipDropdownTables_()) {
-      setDropdown(sh, row, 8, ['Must', 'Should', 'Could']);
-      setDropdown(sh, row, 10, ['草案', 'レビュー中', '合意済', '差し戻し', '廃止']);
-    }
+    setDropdown(sh, row, 8, ['Must', 'Should', 'Could']);
+    setDropdown(sh, row, 10, ['草案', 'レビュー中', '合意済', '差し戻し', '廃止']);
     sh.getRange(row, 9).setBackground('#fffde7');
     sh.getRange(row, 4).setWrap(true);
   } catch (e) {
@@ -1631,9 +1248,7 @@ function menuAddUC() {
     // 「データは 1 行だが範囲は N 行」エラーになる場合があるため）
     sh.appendRow([id, '', '', '', '草案']);
     var row = sh.getLastRow();
-    if (!reqSpecUsesChipDropdownTables_()) {
-      setDropdown(sh, row, 5, ['草案', 'レビュー中', '合意済', '保留', '廃止']);
-    }
+    setDropdown(sh, row, 5, ['草案', 'レビュー中', '合意済', '保留', '廃止']);
     applyUcListActorValidation_(ss);
   } catch (e) {
     notifyUser_(String(e.message || e), 'エラー');
@@ -1730,10 +1345,8 @@ function menuAddNFR() {
     }
     sh.appendRow([id, '性能', '', '', '', '', '', '草案']);
     var row = sh.getLastRow();
-    if (!reqSpecUsesChipDropdownTables_()) {
-      setDropdown(sh, row, 2, ['性能', '可用性', 'セキュリティ', '保守性', 'UX']);
-      setDropdown(sh, row, 8, ['草案', 'レビュー中', '合意済', '差し戻し', '廃止']);
-    }
+    setDropdown(sh, row, 2, ['性能', '可用性', 'セキュリティ', '保守性', 'UX']);
+    setDropdown(sh, row, 8, ['草案', 'レビュー中', '合意済', '差し戻し', '廃止']);
     sh.getRange(row, 7).setBackground('#fffde7');
   } catch (e) {
     notifyUser_(String(e.message || e), 'エラー');
@@ -1751,10 +1364,8 @@ function menuAddCON() {
     }
     sh.appendRow([id, '技術', '', '', '', '草案']);
     var row = sh.getLastRow();
-    if (!reqSpecUsesChipDropdownTables_()) {
-      setDropdown(sh, row, 2, ['技術', 'ビジネス', '法規制', '運用']);
-      setDropdown(sh, row, 6, ['草案', '合意済', '廃止']);
-    }
+    setDropdown(sh, row, 2, ['技術', 'ビジネス', '法規制', '運用']);
+    setDropdown(sh, row, 6, ['草案', '合意済', '廃止']);
     sh.getRange(row, 5).setBackground('#fffde7');
   } catch (e) {
     notifyUser_(String(e.message || e), 'エラー');
@@ -1772,9 +1383,7 @@ function menuAddIF() {
     }
     sh.appendRow([id, '', 'OUT（送信）', '', '', '', '', '']);
     var row = sh.getLastRow();
-    if (!reqSpecUsesChipDropdownTables_()) {
-      setDropdown(sh, row, 3, ['IN（受信）', 'OUT（送信）', '双方向']);
-    }
+    setDropdown(sh, row, 3, ['IN（受信）', 'OUT（送信）', '双方向']);
   } catch (e) {
     notifyUser_(String(e.message || e), 'エラー');
   }
@@ -1791,9 +1400,7 @@ function menuAddOI() {
     }
     sh.appendRow([id, '', '', '', '', '', '未解決']);
     var row = sh.getLastRow();
-    if (!reqSpecUsesChipDropdownTables_()) {
-      setDropdown(sh, row, 7, ['未解決', '解決済', '保留', '取り下げ']);
-    }
+    setDropdown(sh, row, 7, ['未解決', '解決済', '保留', '取り下げ']);
   } catch (e) {
     notifyUser_(String(e.message || e), 'エラー');
   }
