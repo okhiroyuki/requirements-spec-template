@@ -269,12 +269,14 @@ function getActorIdValidationRange_(ss) {
 
 /**
  * 📖 UC一覧 のデータ行（UCID が UC-nnn）の「アクター」列に、👤 アクター のアクターID一覧から選ぶ入力規則を付与する。
- * テーブル API 利用時もこの列は TEXT のため SpreadsheetApp で付与できる。
+ * テーブル API でシートを「テーブル」化している場合、当列は型付き列となり SpreadsheetApp の入力規則は付与できない（スキップする）。
  */
 function applyUcListActorValidation_(ss) {
   var listSh = ss.getSheetByName(UC_LIST_SHEET_NAME);
   var vr = getActorIdValidationRange_(ss);
   if (!listSh || !vr) return;
+
+  if (reqSpecUsesChipDropdownTables_()) return;
 
   var rule = SpreadsheetApp.newDataValidation()
     .requireValueInRange(vr, true)
@@ -283,11 +285,20 @@ function applyUcListActorValidation_(ss) {
 
   var lr = listSh.getLastRow();
   var r;
-  for (r = 2; r <= lr; r++) {
-    var ucCell = String(listSh.getRange(r, 1).getValue()).trim();
-    if (/^UC-\d+$/.test(ucCell)) {
-      listSh.getRange(r, 2).setDataValidation(rule);
+  try {
+    for (r = 2; r <= lr; r++) {
+      var ucCell = String(listSh.getRange(r, 1).getValue()).trim();
+      if (/^UC-\d+$/.test(ucCell)) {
+        listSh.getRange(r, 2).setDataValidation(rule);
+      }
     }
+  } catch (e) {
+    var msg = String(e.message || e);
+    if (msg.indexOf('型付き') !== -1 || /typed column/i.test(msg)) {
+      Logger.log('applyUcListActorValidation_: skip typed table column — ' + msg);
+      return;
+    }
+    throw e;
   }
 }
 
@@ -295,6 +306,17 @@ function applyUcListActorValidation_(ss) {
 function menuRefreshUcListActorValidation() {
   try {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
+    if (reqSpecUsesChipDropdownTables_()) {
+      notifyUser_(
+        'このブックは「テーブル」化（チップ型ドロップダウン）されています。Google スプレッドシートの制限で、📖 UC一覧 の「アクター」列のような**型付き列**には入力規則を付けられません。**`ACT-001` 形式を手入力**し、**👤 アクター** の A 列と揃えてください。Markdown 書き出しでは従来どおり ID＋名前に展開されます。',
+        '入力規則'
+      );
+      return;
+    }
+    if (!getActorIdValidationRange_(ss)) {
+      notifyUser_('👤 アクター にアクターIDの行がありません。', '入力規則');
+      return;
+    }
     applyUcListActorValidation_(ss);
     toastDone_('📖 UC一覧 のアクター列に 👤 アクター の一覧を参照する入力規則を付けました。', '入力規則');
   } catch (e) {
