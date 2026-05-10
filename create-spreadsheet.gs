@@ -305,6 +305,112 @@ function getActorNameValidationRange_(ss) {
 }
 
 /**
+ * シートの A 列で最終データ行までの ID セル範囲（requireValueInRange の一覧元）。
+ */
+function getFirstColumnIdRange_(sheet, maxScanRow) {
+  if (!sheet) return null;
+  maxScanRow = maxScanRow || 500;
+  var lr = Math.min(sheet.getLastRow(), maxScanRow);
+  if (lr < 2) return null;
+  var numScan = lr - 1;
+  var colA = sheet.getRange(2, 1, numScan, 1).getValues();
+  var lastData = 1;
+  var i;
+  for (i = 0; i < colA.length; i++) {
+    if (String(colA[i][0]).trim() !== '') lastData = i + 2;
+  }
+  if (lastData < 2) return null;
+  var numRows = lastData - 2 + 1;
+  return sheet.getRange(2, 1, numRows, 1);
+}
+
+/** 🎯 ビジネス要求 の BR-ID（A 列）一覧範囲 */
+function getBrIdListRange_(ss) {
+  return getFirstColumnIdRange_(ss.getSheetByName('🎯 ビジネス要求'));
+}
+
+/** 📖 UC一覧 の UC-ID（A 列）一覧範囲 */
+function getUcIdListRange_(ss) {
+  return getFirstColumnIdRange_(ss.getSheetByName(UC_LIST_SHEET_NAME));
+}
+
+/**
+ * 📖 UC一覧 の「関連BR」列（4）に、🎯 ビジネス要求の BR-ID を選ぶ入力規則を付与する。
+ */
+function applyUcListRelatedBrValidation_(ss) {
+  var listSh = ss.getSheetByName(UC_LIST_SHEET_NAME);
+  if (!listSh) return;
+  var vr = getBrIdListRange_(ss);
+  var rule = vr
+    ? SpreadsheetApp.newDataValidation()
+        .requireValueInRange(vr, true)
+        .setAllowInvalid(true)
+        .build()
+    : null;
+
+  var lr = Math.min(listSh.getLastRow(), 500);
+  var r;
+  try {
+    for (r = 2; r <= lr; r++) {
+      var ucCell = String(listSh.getRange(r, 1).getValue()).trim();
+      if (!/^UC-\d+$/.test(ucCell)) continue;
+      var cell = listSh.getRange(r, 4);
+      if (rule) cell.setDataValidation(rule);
+      else cell.clearDataValidation();
+    }
+  } catch (e) {
+    var msg = String(e.message || e);
+    if (msg.indexOf('型付き') !== -1 || /typed column/i.test(msg)) {
+      Logger.log('applyUcListRelatedBrValidation_: skip typed table column — ' + msg);
+      return;
+    }
+    throw e;
+  }
+}
+
+/**
+ * ⚙️ 機能要求 の「関連UC」列（3）に、📖 UC一覧の UC-ID を選ぶ入力規則を付与する。
+ */
+function applyFrRelatedUcValidation_(ss) {
+  var frSh = ss.getSheetByName('⚙️ 機能要求');
+  if (!frSh) return;
+  var vr = getUcIdListRange_(ss);
+  var rule = vr
+    ? SpreadsheetApp.newDataValidation()
+        .requireValueInRange(vr, true)
+        .setAllowInvalid(true)
+        .build()
+    : null;
+
+  var lr = Math.min(frSh.getLastRow(), 500);
+  var r;
+  try {
+    for (r = 2; r <= lr; r++) {
+      var frCell = String(frSh.getRange(r, 1).getValue()).trim();
+      if (!/^FR-\d+$/.test(frCell)) continue;
+      var cell = frSh.getRange(r, 3);
+      if (rule) cell.setDataValidation(rule);
+      else cell.clearDataValidation();
+    }
+  } catch (e) {
+    var msg2 = String(e.message || e);
+    if (msg2.indexOf('型付き') !== -1 || /typed column/i.test(msg2)) {
+      Logger.log('applyFrRelatedUcValidation_: skip typed table column — ' + msg2);
+      return;
+    }
+    throw e;
+  }
+}
+
+/** アクター名・関連 BR／UC・外部 IF 連携先など、別シート参照の入力規則をまとめて付与 */
+function applyAllReferenceValidations_(ss) {
+  applyUcListActorValidation_(ss);
+  applyUcListRelatedBrValidation_(ss);
+  applyFrRelatedUcValidation_(ss);
+  applyExternalIfPartnerValidation_(ss);
+}
+
+/**
  * 📖 UC一覧 の「アクター名」列に、👤 アクター の B 列から選ぶ入力規則を付与する。
  */
 function applyUcListActorValidation_(ss) {
@@ -369,27 +475,29 @@ function applyExternalIfPartnerValidation_(ss) {
   }
 }
 
-/** メニュー用：アクター名を参照する入力規則を再適用（📖 UC一覧・🔗 外部IF）。 */
-function menuRefreshUcListActorValidation() {
+/** メニュー用：優先度・ステータスに加え、BR／UC／アクターなど一覧参照の入力規則をすべて再適用 */
+function menuRefreshAllInputValidations() {
   try {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
-    if (!getActorNameValidationRange_(ss)) {
-      notifyUser_('👤 アクター にアクターIDとアクター名の行がありません。', '入力規則');
-      return;
-    }
-    applyUcListActorValidation_(ss);
-    applyExternalIfPartnerValidation_(ss);
-    toastDone_('📖 UC一覧・🔗 外部IF に 👤 アクターのアクター名を参照する入力規則を付けました。', '入力規則');
+    applyRequirementDropdowns_(ss);
+    toastDone_(
+      '🎯 BR・📖 UC・👤 アクターなどを参照する入力規則を含め、ブック全体のドロップダウンを再適用しました。',
+      '入力規則'
+    );
   } catch (e) {
     notifyUser_(String(e.message || e), 'エラー');
   }
 }
 
+/** 後方互換：旧メニュー関数から同一処理を呼ぶ */
+function menuRefreshUcListActorValidation() {
+  menuRefreshAllInputValidations();
+}
+
 /** 全シートに SpreadsheetApp の入力規則を付与（tbl 削除は createRequirementsSheet の先頭で済ませる）。 */
 function applyRequirementDropdowns_(ss) {
   applyLegacyDropdowns_(ss);
-  applyUcListActorValidation_(ss);
-  applyExternalIfPartnerValidation_(ss);
+  applyAllReferenceValidations_(ss);
 }
 
 /**
@@ -1262,7 +1370,7 @@ function onOpen() {
   SpreadsheetApp.getUi()
     .createMenu('要求仕様書')
     .addItem('🔢 IDカウンタをブックから再同期', 'syncIdCountersFromBook')
-    .addItem('🔗 アクター名の入力規則を更新（UC一覧・外部IF）', 'menuRefreshUcListActorValidation')
+    .addItem('🔗 入力規則をすべて更新（BR／UC／アクター連携）', 'menuRefreshAllInputValidations')
     .addItem('🧩 行を追加パネル（サイドバー）', 'showAddRowPanel')
     .addItem('📖 選択行の UC 詳細を追加／更新', 'menuAppendUcDetailFromListRow')
     .addSeparator()
@@ -1284,6 +1392,7 @@ function menuAddBR() {
     setDropdown(sh, row, 4, ['Must', 'Should', 'Could']);
     setDropdown(sh, row, 7, ['草案', 'レビュー中', '合意済', '保留', '廃止']);
     sh.getRange(row, 6).setBackground('#fffde7');
+    applyAllReferenceValidations_(ss);
   } catch (e) {
     notifyUser_(String(e.message || e), 'エラー');
   }
@@ -1304,6 +1413,7 @@ function menuAddFR() {
     setDropdown(sh, row, 10, ['草案', 'レビュー中', '合意済', '差し戻し', '廃止']);
     sh.getRange(row, 9).setBackground('#fffde7');
     sh.getRange(row, 4).setWrap(true);
+    applyAllReferenceValidations_(ss);
   } catch (e) {
     notifyUser_(String(e.message || e), 'エラー');
   }
@@ -1323,7 +1433,7 @@ function menuAddUC() {
     sh.appendRow([id, '', '', '', '草案']);
     var row = sh.getLastRow();
     setDropdown(sh, row, 5, ['草案', 'レビュー中', '合意済', '保留', '廃止']);
-    applyUcListActorValidation_(ss);
+    applyAllReferenceValidations_(ss);
   } catch (e) {
     notifyUser_(String(e.message || e), 'エラー');
   }
@@ -1458,7 +1568,7 @@ function menuAddIF() {
     sh.appendRow([id, '', 'OUT（送信）', '', '', '', '', '']);
     var row = sh.getLastRow();
     setDropdown(sh, row, 3, ['IN（受信）', 'OUT（送信）', '双方向']);
-    applyExternalIfPartnerValidation_(ss);
+    applyAllReferenceValidations_(ss);
   } catch (e) {
     notifyUser_(String(e.message || e), 'エラー');
   }
@@ -1508,8 +1618,7 @@ function menuAddACT() {
     }
     sh.appendRow([id, '', '', '', '']);
     var row = sh.getLastRow();
-    applyUcListActorValidation_(ss);
-    applyExternalIfPartnerValidation_(ss);
+    applyAllReferenceValidations_(ss);
   } catch (e) {
     notifyUser_(String(e.message || e), 'エラー');
   }
