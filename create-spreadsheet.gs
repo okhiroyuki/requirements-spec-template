@@ -28,11 +28,14 @@ var ID_COUNTER_KEYS = [
 
 /**
  * 全シートをクリアし、初期サンプルを再展開する。実行のたびに同じ（確認ダイアログなし）。
- * 入力規則付けのあとサンプル行を入れる（applyRequirementDropdowns_ → seed → UC アクター検証を再適用）。
+ * 流れ: 旧 tbl_* 削除（データ消しを避けるため seed より前）→ setup → seed → 入力規則。
  */
 function createRequirementsSheet() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   ss.setSpreadsheetTimeZone('Asia/Tokyo');
+
+  deleteExistingReqSpecTables_(ss.getId());
+  SpreadsheetApp.flush();
 
   // 既存の空白シートを削除（デフォルトの「シート1」）
   const defaultSheet = ss.getSheetByName('シート1');
@@ -313,9 +316,8 @@ function menuRefreshUcListActorValidation() {
   }
 }
 
-/** 既存のテーブル（tbl_*）を外し、全シートを SpreadsheetApp の入力規則に統一する。 */
+/** 全シートに SpreadsheetApp の入力規則を付与（tbl 削除は createRequirementsSheet の先頭で済ませる）。 */
 function applyRequirementDropdowns_(ss) {
-  deleteExistingReqSpecTables_(ss.getId());
   applyLegacyDropdowns_(ss);
   applyUcListActorValidation_(ss);
 }
