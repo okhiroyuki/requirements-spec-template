@@ -8,8 +8,6 @@
  *   4. 関数「createRequirementsSheet」を選択して実行（実行のたびに全シートを初期サンプルで上書きする）
  *   作成完了ダイアログにメニュー利用の注意（再読み込み）が表示される。反映後はメニュー「要求仕様書」から各機能が使える。
  *
- *   一覧・ステータス等の入力規則は SpreadsheetApp（従来の矢印ドロップダウン）。旧版は Sheets API で「テーブル」化していたが、型付き列と入力規則が両立しないため未使用。
- *
  *   シートの列・項目・Markdown 書き出しなどテンプレートまわりを変えたいときは、このファイルを編集する。
  */
 
@@ -36,15 +34,11 @@ var ID_COUNTER_KEYS = [
   'CON'
 ];
 
-/**
- * 全シートをクリアし、初期サンプルを再展開する。実行のたびに同じ（確認ダイアログなし）。
- * 流れ: setup → seed → 入力規則。
- */
+/** 全シートをクリアし、初期サンプルを再展開する（確認ダイアログなし）。 */
 function createRequirementsSheet() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   ss.setSpreadsheetTimeZone('Asia/Tokyo');
 
-  // 既存の空白シートを削除（デフォルトの「シート1」）
   const defaultSheet = ss.getSheetByName('シート1');
   if (defaultSheet && ss.getSheets().length === 1) {
     const tmp = ss.insertSheet('_tmp');
@@ -99,21 +93,12 @@ function createRequirementsSheet() {
   }
 }
 
-// ─────────────────────────────────────────────
-// ユーティリティ
-// ─────────────────────────────────────────────
 
 function getOrCreateSheet(ss, name) {
   return ss.getSheetByName(name) || ss.insertSheet(name);
 }
 
-/**
- * テンプレ再展開前にシートを「空」へ戻す。
- * 値・書式に加え、データ入力規則（旧テンプレで列ごとに付けたドロップダウン）も明示的に消す。
- * UC 一覧 から「関連BR」列を外したのにブックの D 列に旧 BR 入力規則が残っていると、
- * ステータス「草案」を書き込んだ瞬間に「データ入力規則に違反しています」になってしまうため。
- * maxRows/maxCols はシートの実サイズへクランプする（getMaxRows/getMaxColumns を超えないように）。
- */
+/** 値・書式・入力規則をクリアしてテンプレ再展開の前提にする。 */
 function resetSheetCellsForTemplate_(sh, maxRows, maxCols) {
   if (!sh) return;
   sh.clearContents();
@@ -127,10 +112,7 @@ function resetSheetCellsForTemplate_(sh, maxRows, maxCols) {
   }
 }
 
-/**
- * テンプレのタブ順を固定する（ガイド・行追加パネルと同じ論理順）。
- * insertSheet の既定位置の差を吸収する。
- */
+/** テンプレのシートタブ順を固定する。 */
 function reorderReqSpecSheetTabs_(ss) {
   var names = [
     '📋 概要',
@@ -203,9 +185,7 @@ function showModalDialogSafe_(htmlOutput, dialogTitle) {
   }
 }
 
-/**
- * 軽い完了フィードバック（ID 再同期など）。行追加メニューでは呼ばない。
- */
+/** Toast で完了を通知する。 */
 function toastDone_(message, title) {
   title = title || '完了';
   try {
@@ -249,7 +229,6 @@ function readActorMap_(ss) {
   if (!sh) return {};
   var lr = sh.getLastRow();
   if (lr < 2) return {};
-  // getRange(r,c,numRows,numCols): 第3引数は終端行ではなく行数（2行目〜lr行目 → lr-1 行）
   var vals = sh.getRange(2, 1, lr - 1, 2).getValues();
   var map = {};
   for (var i = 0; i < vals.length; i++) {
@@ -360,11 +339,7 @@ function getBrIdListRange_(ss) {
   return getFirstColumnIdRange_(ss.getSheetByName('🎯 ビジネス要求'));
 }
 
-/**
- * 📖 UC一覧 の UC-ID（A 列）を DV の一覧元にする範囲。
- * データ最終行だけに切ると、UC 追加直後や getLastRow の取りこぼしでプルダウンが古いままになるため、
- * A2 から十分な行数（最低 500 行、最大 2000 行）まで広げ、空セルはプルダウンに出にくいまま一覧と連動させる。
- */
+/** 📖 UC一覧 A 列の UC-ID 範囲（入力規則の参照元。A2 起点で十分な行数を確保）。 */
 function getUcIdListRange_(ss) {
   var sheet = ss.getSheetByName(UC_LIST_SHEET_NAME);
   if (!sheet) return null;
@@ -446,10 +421,8 @@ function applyBucRelatedBrValidation_(ss) {
 }
 
 /**
- * 📙 BUC詳細 の手順表（手順・行動内容・関連UC の **3 列のみ**を想定）。主体は行動内容本文に含める。
- * 「関連UC」（C 列）は 📖 UC一覧 A 列を参照。関連UCが無い手順は空欄のままにする。
- * ブロック終端は次の「▼」行、または A〜C がすべて空の行まで（UC 詳細と同様の空行区切り）。
- * 旧 4 列（アクター列あり）のシートは列を 3 列に直してから本関数を実行すること（C 列が行動内容でないと入力規則が誤る）。
+ * 📙 BUC詳細 手順表：B 列は自由入力、C 列は 📖 UC一覧 の UC-ID（該当なしは空欄）。
+ * ブロックは次の「▼」行、または A〜C がすべて空の行まで。
  */
 function applyBucDetailStepValidations_(ss) {
   var sh = ss.getSheetByName(BUC_DETAIL_SHEET_NAME);
@@ -482,7 +455,8 @@ function applyBucDetailStepValidations_(ss) {
         var qc = String(sh.getRange(sr, 3).getValue()).trim();
 
         if (qa.substring(0, 1) === '▼') break;
-        if (qa === '' && qb === '' && qc === '') break;
+
+        var rowAllEmpty = qa === '' && qb === '' && qc === '';
 
         try {
           sh.getRange(sr, 2).clearDataValidations();
@@ -499,6 +473,8 @@ function applyBucDetailStepValidations_(ss) {
             throw eCell;
           }
         }
+
+        if (rowAllEmpty) break;
       }
       r = sr;
     }
@@ -600,23 +576,10 @@ function menuRefreshAllInputValidations() {
   }
 }
 
-/** 後方互換：旧メニュー関数から同一処理を呼ぶ */
-function menuRefreshUcListActorValidation() {
-  menuRefreshAllInputValidations();
-}
-
 /** 全シートに SpreadsheetApp の入力規則を付与 */
 function applyRequirementDropdowns_(ss) {
   applyLegacyDropdowns_(ss);
   applyAllReferenceValidations_(ss);
-}
-
-/**
- * 旧実装: Sheets API の addTable でチップ型ドロップダウンを付けていた。
- * 型付き列と SpreadsheetApp の入力規則（例: UC 一覧のアクター名列）が両立しないため未使用。
- */
-function applyAllDataTables_(ss) {
-  return false;
 }
 
 /** 各データシートのドロップダウン入力規則を一括付与 */
@@ -716,7 +679,7 @@ function addStatusFormatting(sheet, col, lastRow) {
   sheet.setConditionalFormatRules(cfRules);
 }
 
-/** ドロップダウン適用後に条件付き書式（ステータス列の前景色）を付与 */
+/** ステータス列に条件付き書式（文字色）を付与 */
 function applyStatusFormattingAfterTables_(ss) {
   var sh;
   sh = ss.getSheetByName('🎯 ビジネス要求');
@@ -731,20 +694,15 @@ function applyStatusFormattingAfterTables_(ss) {
   if (sh) addStatusFormatting(sh, 4, 500);
 }
 
-// ─────────────────────────────────────────────
-// タブ 1: 📋 概要
-// ─────────────────────────────────────────────
 
 function setupOverview(ss) {
   const sh = getOrCreateSheet(ss, '📋 概要');
   resetSheetCellsForTemplate_(sh);
 
-  // タイトル
   sh.getRange('A1').setValue('要求仕様書').setFontSize(16).setFontWeight('bold');
   sh.getRange('A1').setBackground('#1a73e8').setFontColor('#ffffff');
   sh.getRange('A1:D1').merge();
 
-  // ドキュメント管理
   const meta = [
     ['ドキュメントID', 'REQ-XXXX',      'バージョン',      '1.0.0'],
     ['ステータス',     '草案',           '作成日',          ''],
@@ -755,10 +713,8 @@ function setupOverview(ss) {
   sh.getRange(3, 1, meta.length, 1).setFontWeight('bold').setBackground('#e8f0fe');
   sh.getRange(3, 3, meta.length, 1).setFontWeight('bold').setBackground('#e8f0fe');
 
-  // ステータスのドロップダウン
   setDropdown(sh, 4, 2, ['草案', 'レビュー中', '承認済']);
 
-  // セクションヘッダー
   const sections = [
     [9,  'プロジェクト概要'],
     [13, 'スコープ（IN）'],
@@ -775,7 +731,6 @@ function setupOverview(ss) {
   sh.getRange(11, 1).setValue('現状（As-Is）');
   sh.getRange(12, 1).setValue('課題');
 
-  // 成功指標テーブル
   const kpiHeader = ['指標', '現状値', '目標値', '測定方法'];
   sh.getRange(22, 1, 1, 4).setValues([kpiHeader]);
   styleHeader(sh, 22, 4);
@@ -784,9 +739,6 @@ function setupOverview(ss) {
   sh.setRowHeight(1, 36);
 }
 
-// ─────────────────────────────────────────────
-// タブ 2: 👤 アクター
-// ─────────────────────────────────────────────
 
 function setupActors(ss) {
   const sh = getOrCreateSheet(ss, '👤 アクター');
@@ -800,9 +752,6 @@ function setupActors(ss) {
   sh.setRowHeights(1, 1, 24);
 }
 
-// ─────────────────────────────────────────────
-// タブ 3: 🎯 ビジネス要求
-// ─────────────────────────────────────────────
 
 function setupBusinessReqs(ss) {
   const sh = getOrCreateSheet(ss, '🎯 ビジネス要求');
@@ -816,9 +765,6 @@ function setupBusinessReqs(ss) {
   sh.setRowHeights(1, 1, 24);
 }
 
-// ─────────────────────────────────────────────
-// タブ 3b: 📗 BUC
-// ─────────────────────────────────────────────
 
 function setupBusinessUseCases(ss) {
   var sh = getOrCreateSheet(ss, BUC_SHEET_NAME);
@@ -832,9 +778,6 @@ function setupBusinessUseCases(ss) {
   sh.setRowHeights(1, 1, 24);
 }
 
-// ─────────────────────────────────────────────
-// タブ 3c: 📙 BUC詳細
-// ─────────────────────────────────────────────
 
 function setupBucDetail(ss) {
   var sh = getOrCreateSheet(ss, BUC_DETAIL_SHEET_NAME);
@@ -848,10 +791,7 @@ function setupBucDetail(ss) {
   sh.setRowHeights(1, sh.getLastRow(), 24);
 }
 
-/**
- * BUC詳細ブロック（▼ 見出し〜手順表：手順・行動内容・関連UC）。
- * 主体・アクターは行動内容に「○○が…」として含める。 skeletonOnly は見出し＋表頭＋1行の空テンプレ。
- */
+/** BUC詳細の ▼ 見出しと 3 列手順表を rowStart から書き込む。 */
 function writeBucDetailBlockAtRow_(sh, rowStart, bucIdToken, bucName, skeletonOnly, stepRows) {
   skeletonOnly = !!skeletonOnly;
   stepRows = stepRows || [];
@@ -866,7 +806,8 @@ function writeBucDetailBlockAtRow_(sh, rowStart, bucIdToken, bucName, skeletonOn
   sh.getRange(hdrRow, 1, 1, 3).setBackground('#1a73e8').setFontColor('#ffffff').setFontWeight('bold');
 
   if (skeletonOnly) {
-    sh.getRange(hdrRow + 1, 1, 1, 3).setValues([['', '', '']]);
+    sh.getRange(hdrRow + 1, 1, 1, 3).setValues([['1', '', '']]);
+    sh.getRange(hdrRow + 1, 2).setWrap(true);
     return;
   }
   if (stepRows.length > 0) {
@@ -876,9 +817,6 @@ function writeBucDetailBlockAtRow_(sh, rowStart, bucIdToken, bucName, skeletonOn
   }
 }
 
-// ─────────────────────────────────────────────
-// タブ 4a: 📖 UC一覧
-// ─────────────────────────────────────────────
 
 function setupUseCaseList(ss) {
   const sh = getOrCreateSheet(ss, UC_LIST_SHEET_NAME);
@@ -892,9 +830,6 @@ function setupUseCaseList(ss) {
   sh.setRowHeights(1, 1, 24);
 }
 
-// ─────────────────────────────────────────────
-// タブ 4b: 📖 UC詳細（一覧シートとは別）
-// ─────────────────────────────────────────────
 
 function setupUseCaseDetail(ss) {
   const sh = getOrCreateSheet(ss, UC_DETAIL_SHEET_NAME);
@@ -906,17 +841,12 @@ function setupUseCaseDetail(ss) {
   sh.setRowHeights(1, sh.getLastRow(), 24);
 }
 
-/**
- * UC 詳細ブロックを rowStart から書き込む（見出し〜代替フローまで）。
- * ucActorLabel は 📖 UC一覧 の「アクター名」列と同様に、👤 アクター の B 列と一致する名前を入れる。
- * skeletonOnly が true のときは項目見出しのみ（メニューからの追加）。本文・フロー番号は入れない。
- */
+/** UC 詳細ブロック（▼ 見出し〜代替フロー）を rowStart から書き込む。 */
 function writeUcDetailBlockAtRow_(sh, rowStart, ucIdToken, ucName, ucActorLabel, skeletonOnly) {
   skeletonOnly = !!skeletonOnly;
 
   var heading = '▼ ' + ucIdToken + ': ' + ucName;
   sh.getRange(rowStart, 1).setValue(heading).setFontWeight('bold').setBackground('#e8f0fe');
-  // getRange(r,c,行数,列数): 第3引数は「終端行」ではなく行数。ここを rowStart にすると rowStart 行ぶん縦マージになり見出しが下端に寄る
   sh.getRange(rowStart, 1, 1, 5).merge();
 
   var ucDetail;
@@ -959,7 +889,6 @@ function writeUcDetailBlockAtRow_(sh, rowStart, ucIdToken, ucName, ucActorLabel,
   sh.getRange(flowStart, 1).setValue('基本フロー').setFontWeight('bold');
 
   if (skeletonOnly) {
-    // 見出しのみ（行番号・3a 等は入れない）。1 行空けて代替フロー見出し
     var altStartSk = flowStart + 2;
     sh.getRange(altStartSk, 1).setValue('代替フロー').setFontWeight('bold');
   } else {
@@ -973,9 +902,6 @@ function writeUcDetailBlockAtRow_(sh, rowStart, ucIdToken, ucName, ucActorLabel,
   }
 }
 
-// ─────────────────────────────────────────────
-// タブ 5: ⚙️ 機能要求
-// ─────────────────────────────────────────────
 
 function setupFunctionalReqs(ss) {
   const sh = getOrCreateSheet(ss, '⚙️ 機能要求');
@@ -989,9 +915,6 @@ function setupFunctionalReqs(ss) {
   sh.setRowHeights(1, 1, 48);
 }
 
-// ─────────────────────────────────────────────
-// タブ 6: 🔒 非機能要求
-// ─────────────────────────────────────────────
 
 function setupNonFunctionalReqs(ss) {
   const sh = getOrCreateSheet(ss, '🔒 非機能要求');
@@ -1005,9 +928,6 @@ function setupNonFunctionalReqs(ss) {
   sh.setRowHeights(1, 1, 24);
 }
 
-// ─────────────────────────────────────────────
-// タブ 7: 🚧 制約条件
-// ─────────────────────────────────────────────
 
 function setupConstraints(ss) {
   const sh = getOrCreateSheet(ss, '🚧 制約条件');
@@ -1021,9 +941,6 @@ function setupConstraints(ss) {
   sh.setRowHeights(1, 1, 24);
 }
 
-// ─────────────────────────────────────────────
-// タブ 8: 🔗 外部IF
-// ─────────────────────────────────────────────
 
 function setupExternalIF(ss) {
   const sh = getOrCreateSheet(ss, '🔗 外部IF');
@@ -1037,9 +954,6 @@ function setupExternalIF(ss) {
   sh.setRowHeights(1, 1, 24);
 }
 
-// ─────────────────────────────────────────────
-// タブ 9: 📌 前提条件（ASM）
-// ─────────────────────────────────────────────
 
 function setupAssumptions(ss) {
   var sh = getOrCreateSheet(ss, '📌 前提条件');
@@ -1053,9 +967,6 @@ function setupAssumptions(ss) {
   sh.setRowHeights(1, 1, 24);
 }
 
-// ─────────────────────────────────────────────
-// タブ 10: ❓ 未解決事項
-// ─────────────────────────────────────────────
 
 function setupOpenIssues(ss) {
   const sh = getOrCreateSheet(ss, '❓ 未解決事項');
@@ -1069,9 +980,6 @@ function setupOpenIssues(ss) {
   sh.setRowHeights(1, 1, 24);
 }
 
-// ─────────────────────────────────────────────
-// タブ 11: 📚 用語集
-// ─────────────────────────────────────────────
 
 function setupGlossary(ss) {
   const sh = getOrCreateSheet(ss, '📚 用語集');
@@ -1085,9 +993,6 @@ function setupGlossary(ss) {
   sh.setRowHeights(1, 1, 24);
 }
 
-// ─────────────────────────────────────────────
-// タブ 12: ✅ 変更履歴
-// ─────────────────────────────────────────────
 
 function setupChangeLog(ss) {
   const sh = getOrCreateSheet(ss, '✅ 変更履歴');
@@ -1101,9 +1006,6 @@ function setupChangeLog(ss) {
   sh.setRowHeights(1, 1, 24);
 }
 
-// ─────────────────────────────────────────────
-// setup・入力規則のあとにサンプル行を入れる
-// ─────────────────────────────────────────────
 
 function seedTemplateSampleRows_(ss) {
   var sh;
@@ -1287,9 +1189,6 @@ function setupIdSheetHeaderOnly_(ss) {
   } catch (e) {}
 }
 
-// ─────────────────────────────────────────────
-// ID 採番（🔢 ID管理）・行追加パネル（menuAdd*）
-// ─────────────────────────────────────────────
 
 /** 従来どおりヘッダ＋カウンタ同期（単体実行用）。createRequirementsSheet は setupIdSheetHeaderOnly_＋seed 後に sync */
 function setupIdManagement(ss) {
@@ -1388,7 +1287,6 @@ function scanMaxIdsFromBook(ss) {
   scanColumn('🔒 非機能要求', 1, function (text) {
     var m1 = text.match(/^NFR-(\d+)$/);
     if (m1) bump('NFR', m1[1]);
-    // 旧形式 NFR-P01 等（移行済みブック用）
     var m2 = text.match(/^NFR-([A-Z])(\d+)$/);
     if (m2) bump('NFR', m2[2]);
   });
@@ -1396,12 +1294,10 @@ function scanMaxIdsFromBook(ss) {
   scanColumn('🚧 制約条件', 1, function (text) {
     var m1 = text.match(/^CON-(\d+)$/);
     if (m1) bump('CON', m1[1]);
-    // 旧形式 CON-T01 等（移行済みブック用）
     var m2 = text.match(/^CON-([A-Z])(\d+)$/);
     if (m2) bump('CON', m2[2]);
   });
 
-  // UC 一覧（A 列）・UC 詳細（▼ UC-nnn）・BUC詳細（▼ BUC-nnn）
   ;[UC_LIST_SHEET_NAME, UC_DETAIL_SHEET_NAME, BUC_DETAIL_SHEET_NAME].forEach(function (name) {
     var ucSh = ss.getSheetByName(name);
     if (!ucSh) return;
@@ -1473,8 +1369,6 @@ function formatRequirementId(counterKey, num) {
   return p + pad;
 }
 
-// ───────── 行追加サイドパネル（メニューと同じ menuAdd* を呼ぶ） ─────────
-
 function showAddRowPanel() {
   var html = HtmlService.createHtmlOutput(getAddRowPanelHtml_()).setTitle('行を追加');
   showSidebarSafe_(html);
@@ -1525,8 +1419,6 @@ function getAddRowPanelHtml_() {
       '</body></html>'
   );
 }
-
-// ───────── メニュー（onOpen） ─────────
 
 function onOpen() {
   SpreadsheetApp.getUi()
@@ -1608,8 +1500,6 @@ function menuAddUC() {
       notifyUser_('シート「' + UC_LIST_SHEET_NAME + '」がありません。createRequirementsSheet を実行してください。', '行を追加');
       return;
     }
-    // BR / FR などと同様に appendRow（テーブル API の矩形と insertRowAfter + setValues の組み合わせで
-    // 「データは 1 行だが範囲は N 行」エラーになる場合があるため）
     sh.appendRow([id, '', '', '草案']);
     var row = sh.getLastRow();
     setDropdown(sh, row, 4, ['草案', 'レビュー中', '合意済', '保留', '廃止']);
@@ -1656,7 +1546,7 @@ function findBucDetailBlockStartRow_(detailSh, bucIdToken) {
   return 0;
 }
 
-/** 追記先の先頭行（UC 詳細と同様、列 A が最終に値がある行の次のあとに空行 1 行）。 */
+/** 📙 BUC詳細 への追記開始行（末尾ブロックのあとに空行を挟む）。 */
 function getBucDetailAppendStartRow_(detailSh) {
   var lrBd = detailSh.getLastRow();
   if (lrBd < 1) return 1;
@@ -1670,10 +1560,7 @@ function getBucDetailAppendStartRow_(detailSh) {
   return maxRb + 2;
 }
 
-/**
- * アクティブセルが 📗 BUC のデータ行のとき、その業務の手順ブロックを 📙 BUC詳細 に追加する。
- * 見出し直後が表頭行（手順・行動内容・関連UC）。ブロック終端は UC 詳細と同様、次の「▼」行または A〜C 全空白行まで。
- */
+/** 📗 BUC の選択行から 📙 BUC詳細 に手順ブロックを追加する。 */
 function menuAppendBucDetailFromListRow() {
   try {
     var ssBd = SpreadsheetApp.getActiveSpreadsheet();
@@ -1717,16 +1604,16 @@ function menuAppendBucDetailFromListRow() {
     applyAllReferenceValidations_(ssBd);
     ssBd.setActiveSheet(detailBd);
     detailBd.getRange(startRowBd, 1).activate();
-    toastDone_('BUC詳細に手順・行動内容・関連UC の 3 列表の枠を追加しました（本文は自分で記入）。', 'BUC 詳細');
+    toastDone_(
+      'BUC詳細に手順表を追加しました。1行目に手順番号と関連UC（📖 UC一覧）の入力規則が付きます。行動内容は自分で記入してください。',
+      'BUC 詳細'
+    );
   } catch (e) {
     notifyUser_(String(e.message || e), 'エラー');
   }
 }
 
-/**
- * アクティブセルが 📖 UC一覧 のデータ行のとき、その UC の詳細ブロックを 📖 UC詳細 に追加する。
- * 既にブロックがある場合はジャンプを確認する。
- */
+/** 📖 UC一覧 の選択行から 📖 UC詳細 にブロックを追加する。 */
 function menuAppendUcDetailFromListRow() {
   try {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -1882,10 +1769,6 @@ function menuAddACT() {
   }
 }
 
-// ═════════════════════════════════════════════
-// Markdown 出力（メニュー「📝 Markdown を作成」）
-// ═════════════════════════════════════════════
-
 function exportRequirementsToMarkdown() {
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -2020,11 +1903,7 @@ function parseBucUseCaseSheets_(listSheet, detailSheet) {
   return mdBd;
 }
 
-/**
- * 📙 BUC詳細（▼ BUC-nnn ブロックと手順表：手順・行動内容・関連UC の 3 列）。
- * ブロック間の区切りは 📖 UC詳細 と同様、次の行が「▼」で始まるか、手順行として解釈した内容がすべて空のときまでが 1 ブロック。
- * 見出し直後の行が表頭（A 列が「手順」）なら 1 行だけ読んで旧 4 列（手順・アクター・行動内容・関連UC）かを判定し、Markdown は常に 3 列に正規化する。
- */
+/** 📙 BUC詳細を Markdown 表にする（▼ BUC-nnn 単位・手順表は 3 列に正規化）。 */
 function parseBucDetailSheet_(sheet) {
   var mdD = '';
   var lastRd = sheet.getLastRow();
@@ -2164,7 +2043,7 @@ function parseUseCaseDetailSheet_(sheet, actorMap, actorNameToId) {
   return md;
 }
 
-/** 旧テンプレ「📖 ユースケース」1シートに一覧と詳細が同居していた場合の書き出し */
+/** 1 シートに UC 一覧＋詳細が同居する形式向け */
 function parseLegacyCombinedUseCaseSheet_(sheet, actorMap, actorNameToId) {
   let md = '## 📖 ユースケース\n\n';
   const lastRow = sheet.getLastRow();
