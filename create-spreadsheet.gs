@@ -336,7 +336,40 @@ function applyUcListActorValidation_(ss) {
   }
 }
 
-/** メニュー用：📖 UC一覧 のアクター名列の入力規則を再適用する（👤 アクターを増減したあとでも実行）。 */
+/**
+ * 🔗 外部IF のデータ行について「連携先システム」列へ、👤 アクター B 列のアクター名を選べる入力規則を付与する。
+ * （システム名は 👤 にアクターとして足しておけば UC・IF で同じ名前に揃えられる）
+ */
+function applyExternalIfPartnerValidation_(ss) {
+  var ifSh = ss.getSheetByName('🔗 外部IF');
+  var vr = getActorNameValidationRange_(ss);
+  if (!ifSh || !vr) return;
+
+  var rule = SpreadsheetApp.newDataValidation()
+    .requireValueInRange(vr, true)
+    .setAllowInvalid(true)
+    .build();
+
+  var lr = Math.min(ifSh.getLastRow(), 500);
+  var r;
+  try {
+    for (r = 2; r <= lr; r++) {
+      var idCell = String(ifSh.getRange(r, 1).getValue()).trim();
+      if (/^IF-\d+$/.test(idCell)) {
+        ifSh.getRange(r, 2).setDataValidation(rule);
+      }
+    }
+  } catch (e) {
+    var msg = String(e.message || e);
+    if (msg.indexOf('型付き') !== -1 || /typed column/i.test(msg)) {
+      Logger.log('applyExternalIfPartnerValidation_: skip typed table column — ' + msg);
+      return;
+    }
+    throw e;
+  }
+}
+
+/** メニュー用：アクター名を参照する入力規則を再適用（📖 UC一覧・🔗 外部IF）。 */
 function menuRefreshUcListActorValidation() {
   try {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -345,7 +378,8 @@ function menuRefreshUcListActorValidation() {
       return;
     }
     applyUcListActorValidation_(ss);
-    toastDone_('📖 UC一覧 のアクター名列に 👤 アクター のアクター名を参照する入力規則を付けました。', '入力規則');
+    applyExternalIfPartnerValidation_(ss);
+    toastDone_('📖 UC一覧・🔗 外部IF に 👤 アクターのアクター名を参照する入力規則を付けました。', '入力規則');
   } catch (e) {
     notifyUser_(String(e.message || e), 'エラー');
   }
@@ -355,6 +389,7 @@ function menuRefreshUcListActorValidation() {
 function applyRequirementDropdowns_(ss) {
   applyLegacyDropdowns_(ss);
   applyUcListActorValidation_(ss);
+  applyExternalIfPartnerValidation_(ss);
 }
 
 /**
@@ -938,7 +973,7 @@ function seedTemplateSampleRows_(ss) {
     data = [
       ['IF-001', '既存受注管理システム', 'OUT（送信）', 'REST API / JSON', 'リアルタイム', '受注データ', '顧客 IT 部門', ''],
       ['IF-002', '会計システム', 'OUT（送信）', 'CSV ファイル連携', '日次（深夜）', '請求データ', '顧客 経理部門', ''],
-      ['IF-003', 'メール通知（SendGrid）', 'OUT（送信）', 'REST API / JSON', 'イベント駆動', '通知メール', '自社', 'API キー管理要'],
+      ['IF-003', '外部システム', 'OUT（送信）', 'REST API / JSON（例: SendGrid）', 'イベント駆動', '通知メール', '自社', 'API キー管理要'],
     ];
     sh.getRange(2, 1, data.length, 8).setValues(data);
     sh.setRowHeights(1, sh.getLastRow(), 24);
@@ -1225,7 +1260,7 @@ function onOpen() {
   SpreadsheetApp.getUi()
     .createMenu('要求仕様書')
     .addItem('🔢 IDカウンタをブックから再同期', 'syncIdCountersFromBook')
-    .addItem('🔗 UC一覧 · アクター名列の入力規則を更新', 'menuRefreshUcListActorValidation')
+    .addItem('🔗 アクター名の入力規則を更新（UC一覧・外部IF）', 'menuRefreshUcListActorValidation')
     .addItem('🧩 行を追加パネル（サイドバー）', 'showAddRowPanel')
     .addItem('📖 選択行の UC 詳細を追加／更新', 'menuAppendUcDetailFromListRow')
     .addSeparator()
@@ -1421,6 +1456,7 @@ function menuAddIF() {
     sh.appendRow([id, '', 'OUT（送信）', '', '', '', '', '']);
     var row = sh.getLastRow();
     setDropdown(sh, row, 3, ['IN（受信）', 'OUT（送信）', '双方向']);
+    applyExternalIfPartnerValidation_(ss);
   } catch (e) {
     notifyUser_(String(e.message || e), 'エラー');
   }
@@ -1471,6 +1507,7 @@ function menuAddACT() {
     sh.appendRow([id, '', '', '', '']);
     var row = sh.getLastRow();
     applyUcListActorValidation_(ss);
+    applyExternalIfPartnerValidation_(ss);
   } catch (e) {
     notifyUser_(String(e.message || e), 'エラー');
   }
@@ -1533,7 +1570,11 @@ function exportRequirementsToMarkdown() {
       const sheet = ss.getSheetByName(info.name);
       if (sheet) {
         md += '## ' + info.name + '\n\n';
-        md += extractTableAsMarkdown(sheet, info.startRow, 1, info.cols) + '\n\n';
+        if (info.name === '🔗 外部IF') {
+          md += extractExternalIfTableAsMarkdown_(sheet, actorMap, actorNameToId) + '\n\n';
+        } else {
+          md += extractTableAsMarkdown(sheet, info.startRow, 1, info.cols) + '\n\n';
+        }
       }
     });
 
@@ -1753,6 +1794,29 @@ function extractTableAsMarkdown(sheet, startRow, startCol, numCols) {
   const filteredData = data.filter(function (row) {
     return row.join('').trim() !== '';
   });
+  return arrayToMarkdownTable(filteredData);
+}
+
+/** 🔗 外部IF の Markdown。「連携先システム」は UC と同様に ACT-xxx（名前）へ解決。 */
+function extractExternalIfTableAsMarkdown_(sheet, actorMap, actorNameToId) {
+  var startRow = 1;
+  var startCol = 1;
+  var numCols = 8;
+  var lastRow = sheet.getLastRow();
+  if (lastRow < startRow) return '';
+  var numRows = lastRow - startRow + 1;
+  var data = sheet.getRange(startRow, startCol, numRows, numCols).getValues();
+  var filteredData = data.filter(function (row) {
+    return row.join('').trim() !== '';
+  });
+  var j;
+  for (j = 1; j < filteredData.length; j++) {
+    var rowCopy = filteredData[j].slice();
+    if (/^IF-\d+$/.test(String(rowCopy[0]).trim())) {
+      rowCopy[1] = resolveActorLabelForMarkdown_(rowCopy[1], actorMap, actorNameToId);
+    }
+    filteredData[j] = rowCopy;
+  }
   return arrayToMarkdownTable(filteredData);
 }
 
