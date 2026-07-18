@@ -1,6 +1,14 @@
 /** ドロップダウン・別シート参照（BR／UC／アクターなど）の入力規則、ステータス条件付き書式。 */
 
 /**
+ * 実データ行数を十分に超える見込みの余白行数。
+ * UC-ID 一覧の参照範囲や条件付き書式など、「将来追加される行もあらかじめカバーしておきたい」
+ * 用途で使う（都度スキャンする用途では使わない。sheet.getLastRow() は既に実データの最終行を
+ * 返すので、そちらは追加の上限を設けない）。シートの実際の行数（getMaxRows）でクランプされる。
+ */
+var VALIDATION_ROW_HEADROOM = 2000;
+
+/**
  * 👤 アクター の A 列→B 列（アクター名）マップ。
  * @return {!Object<string, string>}
  */
@@ -97,10 +105,9 @@ function getActorNameValidationRange_(ss) {
 /**
  * シートの A 列で最終データ行までの ID セル範囲（requireValueInRange の一覧元）。
  */
-function getFirstColumnIdRange_(sheet, maxScanRow) {
+function getFirstColumnIdRange_(sheet) {
   if (!sheet) return null;
-  maxScanRow = maxScanRow || 500;
-  var lr = Math.min(sheet.getLastRow(), maxScanRow);
+  var lr = sheet.getLastRow();
   if (lr < 2) return null;
   var numScan = lr - 1;
   var colA = sheet.getRange(2, 1, numScan, 1).getValues();
@@ -119,15 +126,15 @@ function getBrIdListRange_(ss) {
   return getFirstColumnIdRange_(ss.getSheetByName('🎯 ビジネス要求'));
 }
 
-/** 📖 UC一覧 A 列の UC-ID 範囲（入力規則の参照元。A2 起点で十分な行数を確保）。 */
+/** 📖 UC一覧 A 列の UC-ID 範囲（入力規則の参照元。A2 起点で実データ+余白ぶんの行数を確保）。 */
 function getUcIdListRange_(ss) {
   var sheet = ss.getSheetByName(UC_LIST_SHEET_NAME);
   if (!sheet) return null;
-  var maxEnd = Math.min(sheet.getMaxRows(), 2000);
+  var maxEnd = sheet.getMaxRows();
   if (maxEnd < 2) return null;
   var lastRow = Math.min(sheet.getLastRow(), maxEnd);
   if (lastRow < 2) return null;
-  var endRow = Math.min(maxEnd, Math.max(lastRow, 500));
+  var endRow = Math.min(maxEnd, lastRow + VALIDATION_ROW_HEADROOM);
   var numRows = endRow - 2 + 1;
   return sheet.getRange(2, 1, numRows, 1);
 }
@@ -146,7 +153,7 @@ function applyFrRelatedUcValidation_(ss) {
         .build()
     : null;
 
-  var lr = Math.min(frSh.getLastRow(), 500);
+  var lr = frSh.getLastRow();
   var r;
   try {
     for (r = 2; r <= lr; r++) {
@@ -196,7 +203,7 @@ function applyBucRelatedBrValidation_(ss) {
         .build()
     : null;
 
-  var lr = Math.min(bucSh.getLastRow(), 500);
+  var lr = bucSh.getLastRow();
   var r;
   try {
     for (r = 2; r <= lr; r++) {
@@ -232,7 +239,7 @@ function applyBucDetailStepValidations_(ss) {
         .build()
     : null;
 
-  var lrCap = Math.min(sh.getLastRow(), 1200);
+  var lrCap = sh.getLastRow();
   var r;
 
   try {
@@ -339,7 +346,7 @@ function applyExternalIfPartnerValidation_(ss) {
     .setAllowInvalid(false)
     .build();
 
-  var lr = Math.min(ifSh.getLastRow(), 500);
+  var lr = ifSh.getLastRow();
   var r;
   try {
     for (r = 2; r <= lr; r++) {
@@ -380,11 +387,9 @@ function applyRequirementDropdowns_(ss) {
 
 /** 各データシートのドロップダウン入力規則を一括付与 */
 function applyLegacyDropdowns_(ss) {
-  var lrCap = 500;
-
   var shBR = ss.getSheetByName('🎯 ビジネス要求');
   if (shBR) {
-    var lrBR = Math.min(shBR.getLastRow(), lrCap);
+    var lrBR = shBR.getLastRow();
     for (var rBR = 2; rBR <= lrBR; rBR++) {
       setDropdown(shBR, rBR, 4, ['Must', 'Should', 'Could']);
       setDropdown(shBR, rBR, 7, ['草案', 'レビュー中', '合意済', '保留', '廃止']);
@@ -393,7 +398,7 @@ function applyLegacyDropdowns_(ss) {
 
   var shFR = ss.getSheetByName('⚙️ 機能要求');
   if (shFR) {
-    var lrFR = Math.min(shFR.getLastRow(), lrCap);
+    var lrFR = shFR.getLastRow();
     for (var rFR = 2; rFR <= lrFR; rFR++) {
       setDropdown(shFR, rFR, 8, ['Must', 'Should', 'Could']);
       setDropdown(shFR, rFR, 10, ['草案', 'レビュー中', '合意済', '差し戻し', '廃止']);
@@ -402,7 +407,7 @@ function applyLegacyDropdowns_(ss) {
 
   var shNFR = ss.getSheetByName('🔒 非機能要求');
   if (shNFR) {
-    var lrNFR = Math.min(shNFR.getLastRow(), lrCap);
+    var lrNFR = shNFR.getLastRow();
     for (var rNFR = 2; rNFR <= lrNFR; rNFR++) {
       setDropdown(shNFR, rNFR, 2, ['性能', '可用性', 'セキュリティ', '保守性', 'UX']);
       setDropdown(shNFR, rNFR, 8, ['草案', 'レビュー中', '合意済', '差し戻し', '廃止']);
@@ -411,7 +416,7 @@ function applyLegacyDropdowns_(ss) {
 
   var shCON = ss.getSheetByName('🚧 制約条件');
   if (shCON) {
-    var lrCON = Math.min(shCON.getLastRow(), lrCap);
+    var lrCON = shCON.getLastRow();
     for (var rCON = 2; rCON <= lrCON; rCON++) {
       setDropdown(shCON, rCON, 2, ['技術', 'ビジネス', '法規制', '運用']);
       setDropdown(shCON, rCON, 6, ['草案', '合意済', '廃止']);
@@ -420,7 +425,7 @@ function applyLegacyDropdowns_(ss) {
 
   var shIF = ss.getSheetByName('🔗 外部IF');
   if (shIF) {
-    var lrIF = Math.min(shIF.getLastRow(), lrCap);
+    var lrIF = shIF.getLastRow();
     for (var rIF = 2; rIF <= lrIF; rIF++) {
       setDropdown(shIF, rIF, 3, ['IN（受信）', 'OUT（送信）', '双方向']);
     }
@@ -428,7 +433,7 @@ function applyLegacyDropdowns_(ss) {
 
   var shOI = ss.getSheetByName('❓ 未解決事項');
   if (shOI) {
-    var lrOI = Math.min(shOI.getLastRow(), lrCap);
+    var lrOI = shOI.getLastRow();
     for (var rOI = 2; rOI <= lrOI; rOI++) {
       setDropdown(shOI, rOI, 7, ['未解決', '解決済', '保留', '取り下げ']);
     }
@@ -452,9 +457,14 @@ function applyUcListDropdownsLegacy_(ss) {
   }
 }
 
-/** ステータス列の文字色のみを条件付き書式で付与する（セル背景は付けない） */
-function addStatusFormatting(sheet, col, lastRow) {
-  const range = sheet.getRange(2, col, lastRow - 1, 1);
+/**
+ * ステータス列の文字色のみを条件付き書式で付与する（セル背景は付けない）。
+ * desiredRows はシートの実際の行数（getMaxRows）まで自動的に切り詰める。
+ */
+function addStatusFormatting(sheet, col, desiredRows) {
+  var rows = Math.min(desiredRows, sheet.getMaxRows() - 1);
+  if (rows < 1) return;
+  const range = sheet.getRange(2, col, rows, 1);
   const rules = [
     { text: '合意済',     fg: '#137333' },
     { text: '解決済',     fg: '#137333' },
@@ -479,13 +489,13 @@ function addStatusFormatting(sheet, col, lastRow) {
 function applyStatusFormattingAfterTables_(ss) {
   var sh;
   sh = ss.getSheetByName('🎯 ビジネス要求');
-  if (sh) addStatusFormatting(sh, 7, 30);
+  if (sh) addStatusFormatting(sh, 7, VALIDATION_ROW_HEADROOM);
   sh = ss.getSheetByName('⚙️ 機能要求');
-  if (sh) addStatusFormatting(sh, 10, 30);
+  if (sh) addStatusFormatting(sh, 10, VALIDATION_ROW_HEADROOM);
   sh = ss.getSheetByName('🔒 非機能要求');
-  if (sh) addStatusFormatting(sh, 8, 30);
+  if (sh) addStatusFormatting(sh, 8, VALIDATION_ROW_HEADROOM);
   sh = ss.getSheetByName('❓ 未解決事項');
-  if (sh) addStatusFormatting(sh, 7, 30);
+  if (sh) addStatusFormatting(sh, 7, VALIDATION_ROW_HEADROOM);
   sh = ss.getSheetByName(UC_LIST_SHEET_NAME);
-  if (sh) addStatusFormatting(sh, 5, 500);
+  if (sh) addStatusFormatting(sh, 5, VALIDATION_ROW_HEADROOM);
 }

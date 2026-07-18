@@ -110,7 +110,7 @@ function setupBusinessUseCases(ss) {
 
 function setupBucDetail(ss) {
   var sh = getOrCreateSheet(ss, BUC_DETAIL_SHEET_NAME);
-  resetSheetCellsForTemplate_(sh, 1200, 10);
+  resetSheetCellsForTemplate_(sh, VALIDATION_ROW_HEADROOM, 10);
   writeBucDetailBlockAtRow_(sh, 1, 'BUC-001', '受注登録・検証業務', false, [
     ['1', '顧客が注文書を送付する', ''],
     ['2', '一般ユーザーが注文内容をシステムに入力する', 'UC-001'],
@@ -148,7 +148,7 @@ function writeBucDetailBlockAtRow_(sh, rowStart, bucIdToken, bucName, skeletonOn
 
 function setupUseCaseList(ss) {
   const sh = getOrCreateSheet(ss, UC_LIST_SHEET_NAME);
-  resetSheetCellsForTemplate_(sh, 2000, 10);
+  resetSheetCellsForTemplate_(sh, VALIDATION_ROW_HEADROOM, 10);
 
   const listHeaders = ['UCID', 'アクター名', 'ユースケース名', '概要', 'ステータス'];
   sh.getRange(1, 1, 1, listHeaders.length).setValues([listHeaders]);
@@ -161,7 +161,7 @@ function setupUseCaseList(ss) {
 
 function setupUseCaseDetail(ss) {
   const sh = getOrCreateSheet(ss, UC_DETAIL_SHEET_NAME);
-  resetSheetCellsForTemplate_(sh, 1200, 10);
+  resetSheetCellsForTemplate_(sh, VALIDATION_ROW_HEADROOM, 10);
 
   writeUcDetailBlockAtRow_(sh, 1, 'UC-001', '受注データを登録する', '一般ユーザー');
 
