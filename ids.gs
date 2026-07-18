@@ -108,17 +108,13 @@ function scanMaxIdsFromBook(ss) {
   });
 
   scanColumn('🔒 非機能要求', 1, function (text) {
-    let m1 = text.match(/^NFR-(\d+)$/);
-    if (m1) bump('NFR', m1[1]);
-    let m2 = text.match(/^NFR-([A-Z])(\d+)$/);
-    if (m2) bump('NFR', m2[2]);
+    let m = text.match(/^NFR-(\d+)$/);
+    if (m) bump('NFR', m[1]);
   });
 
   scanColumn('🚧 制約条件', 1, function (text) {
-    let m1 = text.match(/^CON-(\d+)$/);
-    if (m1) bump('CON', m1[1]);
-    let m2 = text.match(/^CON-([A-Z])(\d+)$/);
-    if (m2) bump('CON', m2[2]);
+    let m = text.match(/^CON-(\d+)$/);
+    if (m) bump('CON', m[1]);
   });
 
   ;[UC_LIST_SHEET_NAME, UC_DETAIL_SHEET_NAME, BUC_DETAIL_SHEET_NAME].forEach(function (name) {
