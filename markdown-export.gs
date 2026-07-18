@@ -42,7 +42,7 @@ function exportRequirementsToMarkdown() {
     function ensureBucSectionHeader_() {
       if (bucSectionOpened) return '';
       bucSectionOpened = true;
-      return '## BUC\n\n';
+      return '## ' + BUC_SHEET_NAME + '\n\n';
     }
     function ensureUcSectionHeader_() {
       if (ucSectionOpened) return '';
