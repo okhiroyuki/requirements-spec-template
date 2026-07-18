@@ -424,12 +424,25 @@ function showMarkdownDialog(mdText) {
     'var decodedStr = decodeURIComponent(escape(atob(encodedStr)));' +
     'var textArea = document.getElementById("mdOutput");' +
     'textArea.value = decodedStr;' +
-    'function copyToClipboard() {' +
-    'textArea.select();' +
-    'document.execCommand("copy");' +
+    'function showCopied() {' +
     'var msg = document.getElementById("msg");' +
     'msg.style.display = "inline";' +
     'setTimeout(function() { msg.style.display = "none"; }, 2000);' +
+    '}' +
+    'function copyWithExecCommand() {' +
+    'textArea.select();' +
+    'document.execCommand("copy");' +
+    'showCopied();' +
+    '}' +
+    'function copyToClipboard() {' +
+    // Apps Script dialogs run in a sandboxed iframe where the Clipboard API
+    // may be unavailable or denied by permissions policy, so fall back to
+    // the (deprecated but still broadly supported) execCommand approach.
+    'if (navigator.clipboard && navigator.clipboard.writeText) {' +
+    'navigator.clipboard.writeText(textArea.value).then(showCopied, copyWithExecCommand);' +
+    '} else {' +
+    'copyWithExecCommand();' +
+    '}' +
     '}' +
     '</script>' +
     '</body>' +
