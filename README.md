@@ -64,3 +64,7 @@ pnpm test        # 一括実行
 pnpm test:watch  # 変更を監視して再実行
 ```
 
+## ライセンス
+
+[MIT](LICENSE)
+
