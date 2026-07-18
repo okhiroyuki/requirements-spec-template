@@ -14,6 +14,7 @@ function setupOverview(ss) {
     ['最終更新日',     '',               '作成者',          ''],
     ['承認者（顧客）', '',               '承認者（自社）',   ''],
   ];
+  sh.getRange(3, 4).setNumberFormat('@');
   sh.getRange(3, 1, meta.length, 4).setValues(meta);
   sh.getRange(3, 1, meta.length, 1).setFontWeight('bold').setBackground('#e8f0fe');
   sh.getRange(3, 3, meta.length, 1).setFontWeight('bold').setBackground('#e8f0fe');
@@ -330,6 +331,7 @@ function setupChangeLog(ss) {
   sh.getRange(1, 1, 1, headers.length).setValues([headers]);
   styleHeader(sh, 1, headers.length);
 
+  sh.getRange(2, 1, 50, 1).setNumberFormat('@');
   setColWidths(sh, [110, 120, 140, 340, 180]);
   sh.setRowHeights(1, 1, 24);
 }
@@ -379,7 +381,7 @@ function seedTemplateSampleRows_(ss) {
     for (br = 0; br < data.length; br++) {
       bucFormulas.push([bucBrMirrorFormula_(2 + br)]);
     }
-    sh.getRange(2, 5, 1 + data.length, 5).setFormulas(bucFormulas);
+    sh.getRange(2, 5, data.length, 1).setFormulas(bucFormulas);
     sh.setRowHeights(1, sh.getLastRow(), 24);
     sh.getRange(2, 3, data.length, 1).setWrap(true);
     sh.getRange(2, 5, data.length, 1).setWrap(true);
