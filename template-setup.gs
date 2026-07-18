@@ -124,7 +124,7 @@ function createRequirementsSheet() {
 
 /** テンプレの固定タブが 1 つでも既にあれば、入力済みブックの可能性ありとみなす。 */
 function bookHasExistingTemplateData_(ss) {
-  for (var i = 0; i < TEMPLATE_SHEET_NAMES.length; i++) {
+  for (let i = 0; i < TEMPLATE_SHEET_NAMES.length; i++) {
     if (ss.getSheetByName(TEMPLATE_SHEET_NAMES[i])) return true;
   }
   return false;
@@ -135,14 +135,14 @@ function bookHasExistingTemplateData_(ss) {
  * ダイアログを表示できない場合は、安全側に倒して false（＝中止）を返す。
  */
 function confirmOverwriteExistingTemplateData_() {
-  var ui;
+  let ui;
   try {
     ui = SpreadsheetApp.getUi();
   } catch (e) {
     Logger.log('confirmOverwriteExistingTemplateData_: 確認ダイアログを表示できないため中止しました。');
     return false;
   }
-  var response = ui.alert(
+  let response = ui.alert(
     '⚠️ 既存データの上書き確認',
     'このブックには既にテンプレートのタブがあります。実行すると全シートが初期サンプルで上書きされ、入力済みのデータは失われます。続行しますか？',
     ui.ButtonSet.YES_NO
@@ -159,8 +159,8 @@ function resetSheetCellsForTemplate_(sh, maxRows, maxCols) {
   if (!sh) return;
   sh.clearContents();
   sh.clearFormats();
-  var rows = Math.min(Math.max(parseInt(maxRows, 10) || 500, 1), sh.getMaxRows());
-  var cols = Math.min(Math.max(parseInt(maxCols, 10) || 40, 1), sh.getMaxColumns());
+  let rows = Math.min(Math.max(parseInt(maxRows, 10) || 500, 1), sh.getMaxRows());
+  let cols = Math.min(Math.max(parseInt(maxCols, 10) || 40, 1), sh.getMaxColumns());
   try {
     sh.getRange(1, 1, rows, cols).clearDataValidations();
   } catch (e) {
@@ -170,9 +170,9 @@ function resetSheetCellsForTemplate_(sh, maxRows, maxCols) {
 
 /** テンプレのシートタブ順を固定する。 */
 function reorderReqSpecSheetTabs_(ss) {
-  var names = TEMPLATE_SHEET_NAMES;
-  for (var i = 0; i < names.length; i++) {
-    var sh = ss.getSheetByName(names[i]);
+  let names = TEMPLATE_SHEET_NAMES;
+  for (let i = 0; i < names.length; i++) {
+    let sh = ss.getSheetByName(names[i]);
     if (sh) {
       ss.setActiveSheet(sh);
       ss.moveActiveSheet(i + 1);
@@ -191,7 +191,7 @@ function notifyUser_(message, title) {
     return;
   } catch (ignore) {}
   try {
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    let ss = SpreadsheetApp.getActiveSpreadsheet();
     if (ss) ss.toast(message, title, 12);
   } catch (ignore2) {
     Logger.log('[' + title + '] ' + message);
@@ -228,7 +228,7 @@ function showModalDialogSafe_(htmlOutput, dialogTitle) {
 function toastDone_(message, title) {
   title = title || '完了';
   try {
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    let ss = SpreadsheetApp.getActiveSpreadsheet();
     if (ss) ss.toast(message, title, 5);
   } catch (ignore) {
     Logger.log('[' + title + '] ' + message);
