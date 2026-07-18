@@ -10,10 +10,15 @@ function isSheetSkippedInMarkdownExport_(sh) {
   return false;
 }
 
+/** Markdown の H2 見出しを整形する（アイコン込みのタイトルを渡す。表記ゆれ防止のため直書きしない）。 */
+function sectionHeader_(title) {
+  return '## ' + title + '\n\n';
+}
+
 /** 📋 概要シートを Markdown の「## 📋 概要」ブロックへ。 */
 function markdownOverviewSection_(overviewSheet) {
   if (!overviewSheet) return '';
-  let out = '## 📋 概要\n\n';
+  let out = sectionHeader_(overviewSheet.getName());
   out += '### ドキュメント管理\n';
   out += flattenOverviewDocManagementTable(overviewSheet) + '\n';
   out += '### プロジェクト概要\n';
@@ -42,12 +47,14 @@ function exportRequirementsToMarkdown() {
     function ensureBucSectionHeader_() {
       if (bucSectionOpened) return '';
       bucSectionOpened = true;
-      return '## BUC\n\n';
+      return sectionHeader_(BUC_SHEET_NAME);
     }
     function ensureUcSectionHeader_() {
       if (ucSectionOpened) return '';
       ucSectionOpened = true;
-      return '## 📖 ユースケース\n\n';
+      // 📖 UC一覧・📖 UC詳細 の2シートをまとめる見出しなので、どちらのシート名とも異なる
+      // グループ名を使う（google-sheets-guide.md に明記された意図的な仕様）。
+      return sectionHeader_('📖 ユースケース');
     }
 
     let sheets = ss.getSheets();
@@ -62,15 +69,15 @@ function exportRequirementsToMarkdown() {
         continue;
       }
       if (name === '📌 前提条件') {
-        md += '## 📌 前提条件\n\n' + extractTableAsMarkdown(sh, 1, 1, 3) + '\n\n';
+        md += sectionHeader_(name) + extractTableAsMarkdown(sh, 1, 1, 3) + '\n\n';
         continue;
       }
       if (name === '👤 アクター') {
-        md += '## 👤 アクター\n\n' + extractTableAsMarkdown(sh, 1, 1, 5) + '\n\n';
+        md += sectionHeader_(name) + extractTableAsMarkdown(sh, 1, 1, 5) + '\n\n';
         continue;
       }
       if (name === '🎯 ビジネス要求') {
-        md += '## 🎯 ビジネス要求\n\n' + extractTableAsMarkdown(sh, 1, 1, 7) + '\n\n';
+        md += sectionHeader_(name) + extractTableAsMarkdown(sh, 1, 1, 7) + '\n\n';
         continue;
       }
       if (name === BUC_SHEET_NAME) {
@@ -105,31 +112,31 @@ function exportRequirementsToMarkdown() {
         continue;
       }
       if (name === '⚙️ 機能要求') {
-        md += '## ' + name + '\n\n' + extractTableAsMarkdown(sh, 1, 1, 11) + '\n\n';
+        md += sectionHeader_(name) + extractTableAsMarkdown(sh, 1, 1, 11) + '\n\n';
         continue;
       }
       if (name === '🔒 非機能要求') {
-        md += '## ' + name + '\n\n' + extractTableAsMarkdown(sh, 1, 1, 8) + '\n\n';
+        md += sectionHeader_(name) + extractTableAsMarkdown(sh, 1, 1, 8) + '\n\n';
         continue;
       }
       if (name === '🚧 制約条件') {
-        md += '## ' + name + '\n\n' + extractTableAsMarkdown(sh, 1, 1, 6) + '\n\n';
+        md += sectionHeader_(name) + extractTableAsMarkdown(sh, 1, 1, 6) + '\n\n';
         continue;
       }
       if (name === '🔗 外部IF') {
-        md += '## ' + name + '\n\n' + extractExternalIfTableAsMarkdown_(sh, actorMap, actorNameToId) + '\n\n';
+        md += sectionHeader_(name) + extractExternalIfTableAsMarkdown_(sh, actorMap, actorNameToId) + '\n\n';
         continue;
       }
       if (name === '❓ 未解決事項') {
-        md += '## ' + name + '\n\n' + extractTableAsMarkdown(sh, 1, 1, 7) + '\n\n';
+        md += sectionHeader_(name) + extractTableAsMarkdown(sh, 1, 1, 7) + '\n\n';
         continue;
       }
       if (name === '📚 用語集') {
-        md += '## ' + name + '\n\n' + extractTableAsMarkdown(sh, 1, 1, 4) + '\n\n';
+        md += sectionHeader_(name) + extractTableAsMarkdown(sh, 1, 1, 4) + '\n\n';
         continue;
       }
       if (name === '✅ 変更履歴') {
-        md += '## ' + name + '\n\n' + extractTableAsMarkdown(sh, 1, 1, 5) + '\n\n';
+        md += sectionHeader_(name) + extractTableAsMarkdown(sh, 1, 1, 5) + '\n\n';
         continue;
       }
     }

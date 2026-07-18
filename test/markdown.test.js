@@ -21,6 +21,14 @@ describe('escapeMarkdown', () => {
   });
 });
 
+describe('sectionHeader_', () => {
+  const gas = loadGasContext();
+
+  it('formats an H2 heading followed by a blank line', () => {
+    expect(gas.sectionHeader_('📗 BUC')).toBe('## 📗 BUC\n\n');
+  });
+});
+
 describe('arrayToMarkdownTable', () => {
   const gas = loadGasContext();
 
