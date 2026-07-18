@@ -5,8 +5,9 @@
  * ids.gs / menu.gs / markdown-export.gs を同じプロジェクトに追加する（同一プロジェクト内では
  * ファイルをまたいで関数・var を共有できるため import は不要）。セットアップ手順は README.md 参照。
  *
- * 関数「createRequirementsSheet」を実行すると、実行のたびに全シートが初期サンプルで上書きされる
- * （確認ダイアログなし）。作成完了ダイアログにメニュー利用の注意（再読み込み）が表示される。
+ * 関数「createRequirementsSheet」を実行すると、実行のたびに全シートが初期サンプルで上書きされる。
+ * ただしテンプレのタブが既に 1 つでもある場合は、上書き前に確認ダイアログを出す（既存データ保護）。
+ * 作成完了ダイアログにメニュー利用の注意（再読み込み）が表示される。
  */
 
 var UC_LIST_SHEET_NAME = '📖 UC一覧';
@@ -34,9 +35,37 @@ var ID_COUNTER_KEYS = [
   'CON'
 ];
 
-/** 全シートをクリアし、初期サンプルを再展開する（確認ダイアログなし）。 */
+/** テンプレの固定タブ名一覧（ID管理含む）。タブ並び替え・既存データ検知で共有する。 */
+var TEMPLATE_SHEET_NAMES = [
+  '📋 概要',
+  '📌 前提条件',
+  '👤 アクター',
+  '🎯 ビジネス要求',
+  BUC_SHEET_NAME,
+  BUC_DETAIL_SHEET_NAME,
+  UC_LIST_SHEET_NAME,
+  UC_DETAIL_SHEET_NAME,
+  '⚙️ 機能要求',
+  '🔒 非機能要求',
+  '🚧 制約条件',
+  '🔗 外部IF',
+  '❓ 未解決事項',
+  '📚 用語集',
+  '✅ 変更履歴',
+  ID_SHEET_NAME,
+];
+
+/**
+ * 全シートをクリアし、初期サンプルを再展開する。
+ * テンプレのタブが既に 1 つでもある場合は、確認ダイアログで YES されない限り何もしない。
+ */
 function createRequirementsSheet() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
+
+  if (bookHasExistingTemplateData_(ss) && !confirmOverwriteExistingTemplateData_()) {
+    return;
+  }
+
   ss.setSpreadsheetTimeZone('Asia/Tokyo');
 
   const defaultSheet = ss.getSheetByName('シート1');
@@ -93,6 +122,33 @@ function createRequirementsSheet() {
   }
 }
 
+/** テンプレの固定タブが 1 つでも既にあれば、入力済みブックの可能性ありとみなす。 */
+function bookHasExistingTemplateData_(ss) {
+  for (var i = 0; i < TEMPLATE_SHEET_NAMES.length; i++) {
+    if (ss.getSheetByName(TEMPLATE_SHEET_NAMES[i])) return true;
+  }
+  return false;
+}
+
+/**
+ * 既存データを上書きしてよいかを YES/NO で確認する。
+ * ダイアログを表示できない場合は、安全側に倒して false（＝中止）を返す。
+ */
+function confirmOverwriteExistingTemplateData_() {
+  var ui;
+  try {
+    ui = SpreadsheetApp.getUi();
+  } catch (e) {
+    Logger.log('confirmOverwriteExistingTemplateData_: 確認ダイアログを表示できないため中止しました。');
+    return false;
+  }
+  var response = ui.alert(
+    '⚠️ 既存データの上書き確認',
+    'このブックには既にテンプレートのタブがあります。実行すると全シートが初期サンプルで上書きされ、入力済みのデータは失われます。続行しますか？',
+    ui.ButtonSet.YES_NO
+  );
+  return response === ui.Button.YES;
+}
 
 function getOrCreateSheet(ss, name) {
   return ss.getSheetByName(name) || ss.insertSheet(name);
@@ -114,24 +170,7 @@ function resetSheetCellsForTemplate_(sh, maxRows, maxCols) {
 
 /** テンプレのシートタブ順を固定する。 */
 function reorderReqSpecSheetTabs_(ss) {
-  var names = [
-    '📋 概要',
-    '📌 前提条件',
-    '👤 アクター',
-    '🎯 ビジネス要求',
-    BUC_SHEET_NAME,
-    BUC_DETAIL_SHEET_NAME,
-    UC_LIST_SHEET_NAME,
-    UC_DETAIL_SHEET_NAME,
-    '⚙️ 機能要求',
-    '🔒 非機能要求',
-    '🚧 制約条件',
-    '🔗 外部IF',
-    '❓ 未解決事項',
-    '📚 用語集',
-    '✅ 変更履歴',
-    ID_SHEET_NAME,
-  ];
+  var names = TEMPLATE_SHEET_NAMES;
   for (var i = 0; i < names.length; i++) {
     var sh = ss.getSheetByName(names[i]);
     if (sh) {
