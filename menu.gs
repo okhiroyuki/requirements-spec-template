@@ -56,7 +56,7 @@ function onOpen() {
     .createMenu('要求仕様書')
     .addItem('🔢 IDカウンタをブックから再同期', 'syncIdCountersFromBook')
     .addItem('🔗 入力規則をすべて更新（BR／UC／アクター連携）', 'menuRefreshAllInputValidations')
-    .addItem('🧩 行を追加パネル（サイドバー）', 'showAddRowPanel')
+    .addItem('🧩 行を追加するパネルを開く（サイドバー）', 'showAddRowPanel')
     .addItem('📙 選択行の BUC 詳細を追加／更新', 'menuAppendBucDetailFromListRow')
     .addItem('📖 選択行の UC 詳細を追加／更新', 'menuAppendUcDetailFromListRow')
     .addSeparator()
