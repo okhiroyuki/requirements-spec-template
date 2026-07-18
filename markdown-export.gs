@@ -13,7 +13,7 @@ function isSheetSkippedInMarkdownExport_(sh) {
 /** 📋 概要シートを Markdown の「## 📋 概要」ブロックへ。 */
 function markdownOverviewSection_(overviewSheet) {
   if (!overviewSheet) return '';
-  var out = '## 📋 概要\n\n';
+  let out = '## 📋 概要\n\n';
   out += '### ドキュメント管理\n';
   out += flattenOverviewDocManagementTable(overviewSheet) + '\n';
   out += '### プロジェクト概要\n';
@@ -32,12 +32,12 @@ function markdownOverviewSection_(overviewSheet) {
 
 function exportRequirementsToMarkdown() {
   try {
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
-    var md = '# 要求仕様書\n\n';
-    var actorMap = readActorMap_(ss);
-    var actorNameToId = readActorNameToIdMap_(ss);
-    var bucSectionOpened = false;
-    var ucSectionOpened = false;
+    let ss = SpreadsheetApp.getActiveSpreadsheet();
+    let md = '# 要求仕様書\n\n';
+    let actorMap = readActorMap_(ss);
+    let actorNameToId = readActorNameToIdMap_(ss);
+    let bucSectionOpened = false;
+    let ucSectionOpened = false;
 
     function ensureBucSectionHeader_() {
       if (bucSectionOpened) return '';
@@ -50,12 +50,12 @@ function exportRequirementsToMarkdown() {
       return '## 📖 ユースケース\n\n';
     }
 
-    var sheets = ss.getSheets();
-    var si;
+    let sheets = ss.getSheets();
+    let si;
     for (si = 0; si < sheets.length; si++) {
-      var sh = sheets[si];
+      let sh = sheets[si];
       if (isSheetSkippedInMarkdownExport_(sh)) continue;
-      var name = sh.getName();
+      let name = sh.getName();
 
       if (name === '📋 概要') {
         md += markdownOverviewSection_(sh);
@@ -184,37 +184,37 @@ function overviewScopeBulletBlock(sheet, startRow, endRow) {
 
 /** 📙 BUC詳細を Markdown 表にする（▼ BUC-nnn 単位・手順表は 3 列に正規化）。 */
 function parseBucDetailSheet_(sheet) {
-  var mdD = '';
-  var lastRd = sheet.getLastRow();
-  var lastCd = sheet.getLastColumn();
+  let mdD = '';
+  let lastRd = sheet.getLastRow();
+  let lastCd = sheet.getLastColumn();
   if (lastRd === 0) return mdD;
 
-  var datD = sheet.getRange(1, 1, lastRd, Math.max(lastCd, 4)).getValues();
-  var ri = 0;
+  let datD = sheet.getRange(1, 1, lastRd, Math.max(lastCd, 4)).getValues();
+  let ri = 0;
   while (ri < datD.length) {
-    var cellAd = String(datD[ri][0]).trim();
+    let cellAd = String(datD[ri][0]).trim();
     if (/^▼\s*BUC-/.test(cellAd)) {
       mdD += '### ' + cellAd + '\n\n';
       ri++;
       if (ri >= datD.length) break;
-      var hdrA = String(datD[ri][0]).trim();
-      var hdrB = String(datD[ri][1] != null ? datD[ri][1] : '').trim();
-      var legacyTable = /^手順$/.test(hdrA) && hdrB === 'アクター';
+      let hdrA = String(datD[ri][0]).trim();
+      let hdrB = String(datD[ri][1] != null ? datD[ri][1] : '').trim();
+      let legacyTable = /^手順$/.test(hdrA) && hdrB === 'アクター';
       if (/^手順$/.test(hdrA)) {
         ri++;
       }
-      var tableD = [['手順', '行動内容', '関連UC']];
+      let tableD = [['手順', '行動内容', '関連UC']];
       while (ri < datD.length) {
-        var ra = String(datD[ri][0]).trim();
-        var rb = String(datD[ri][1] != null ? datD[ri][1] : '').trim();
-        var rc = String(datD[ri][2] != null ? datD[ri][2] : '').trim();
+        let ra = String(datD[ri][0]).trim();
+        let rb = String(datD[ri][1] != null ? datD[ri][1] : '').trim();
+        let rc = String(datD[ri][2] != null ? datD[ri][2] : '').trim();
         if (ra.substring(0, 1) === '▼') break;
 
-        var actionCell;
-        var ucCell;
+        let actionCell;
+        let ucCell;
         if (legacyTable) {
-          var subjL = rb;
-          var bodyL = rc;
+          let subjL = rb;
+          let bodyL = rc;
           if (subjL && bodyL) actionCell = subjL + 'が' + bodyL;
           else actionCell = subjL || bodyL;
           ucCell = datD[ri][3];
@@ -287,7 +287,7 @@ function parseUseCaseDetailSheet_(sheet, actorMap, actorNameToId) {
       md += '#### ' + cellA + '\n\n';
       i++;
       const flowTable = [['No.', 'アクション']];
-      var lastFlowNo = '';
+      let lastFlowNo = '';
       while (i < data.length) {
         const nextCellA = String(data[i][0]).trim();
         const nextCellB = String(data[i][1]).trim();
@@ -295,7 +295,7 @@ function parseUseCaseDetailSheet_(sheet, actorMap, actorNameToId) {
         if (nextCellA.startsWith('▼') || nextCellA === '基本フロー' || nextCellA === '代替フロー') break;
         if (nextCellA === '' && nextCellB === '') break;
 
-        var noOut = nextCellA;
+        let noOut = nextCellA;
         if (noOut === '' && nextCellB !== '') {
           noOut = lastFlowNo;
         } else if (noOut !== '') {
@@ -334,19 +334,19 @@ function extractTableAsMarkdown(sheet, startRow, startCol, numCols) {
 
 /** 🔗 外部IF の Markdown。「連携先システム」は UC と同様に ACT-xxx（名前）へ解決。 */
 function extractExternalIfTableAsMarkdown_(sheet, actorMap, actorNameToId) {
-  var startRow = 1;
-  var startCol = 1;
-  var numCols = 8;
-  var lastRow = sheet.getLastRow();
+  let startRow = 1;
+  let startCol = 1;
+  let numCols = 8;
+  let lastRow = sheet.getLastRow();
   if (lastRow < startRow) return '';
-  var numRows = lastRow - startRow + 1;
-  var data = sheet.getRange(startRow, startCol, numRows, numCols).getValues();
-  var filteredData = data.filter(function (row) {
+  let numRows = lastRow - startRow + 1;
+  let data = sheet.getRange(startRow, startCol, numRows, numCols).getValues();
+  let filteredData = data.filter(function (row) {
     return row.join('').trim() !== '';
   });
-  var j;
+  let j;
   for (j = 1; j < filteredData.length; j++) {
-    var rowCopy = filteredData[j].slice();
+    let rowCopy = filteredData[j].slice();
     if (/^IF-\d+$/.test(String(rowCopy[0]).trim())) {
       rowCopy[1] = resolveActorLabelForMarkdown_(rowCopy[1], actorMap, actorNameToId);
     }
@@ -357,19 +357,19 @@ function extractExternalIfTableAsMarkdown_(sheet, actorMap, actorNameToId) {
 
 /** 📖 UC一覧 の Markdown（アクター名列は出力時に ACT-xxx（名前）へ解決）。 */
 function extractUcListTableAsMarkdown_(sheet, actorMap, actorNameToId) {
-  var startRow = 1;
-  var startCol = 1;
-  var numCols = 5;
-  var lastRow = sheet.getLastRow();
+  let startRow = 1;
+  let startCol = 1;
+  let numCols = 5;
+  let lastRow = sheet.getLastRow();
   if (lastRow < startRow) return '';
-  var numRows = lastRow - startRow + 1;
-  var data = sheet.getRange(startRow, startCol, numRows, numCols).getValues();
-  var filteredData = data.filter(function (row) {
+  let numRows = lastRow - startRow + 1;
+  let data = sheet.getRange(startRow, startCol, numRows, numCols).getValues();
+  let filteredData = data.filter(function (row) {
     return row.join('').trim() !== '';
   });
-  var j;
+  let j;
   for (j = 1; j < filteredData.length; j++) {
-    var rowCopy = filteredData[j].slice();
+    let rowCopy = filteredData[j].slice();
     rowCopy[1] = resolveActorLabelForMarkdown_(rowCopy[1], actorMap, actorNameToId);
     filteredData[j] = rowCopy;
   }

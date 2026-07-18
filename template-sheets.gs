@@ -96,10 +96,10 @@ function setupBusinessReqs(ss) {
 
 
 function setupBusinessUseCases(ss) {
-  var sh = getOrCreateSheet(ss, BUC_SHEET_NAME);
+  let sh = getOrCreateSheet(ss, BUC_SHEET_NAME);
   resetSheetCellsForTemplate_(sh);
 
-  var headers = ['BUCID', '業務名', '業務の概要', '関連BR', '参考：ビジネス要求'];
+  let headers = ['BUCID', '業務名', '業務の概要', '関連BR', '参考：ビジネス要求'];
   sh.getRange(1, 1, 1, headers.length).setValues([headers]);
   styleHeader(sh, 1, headers.length);
 
@@ -109,7 +109,7 @@ function setupBusinessUseCases(ss) {
 
 
 function setupBucDetail(ss) {
-  var sh = getOrCreateSheet(ss, BUC_DETAIL_SHEET_NAME);
+  let sh = getOrCreateSheet(ss, BUC_DETAIL_SHEET_NAME);
   resetSheetCellsForTemplate_(sh, VALIDATION_ROW_HEADROOM, 10);
   writeBucDetailBlockAtRow_(sh, 1, 'BUC-001', '受注登録・検証業務', false, [
     ['1', '顧客が注文書を送付する', ''],
@@ -125,12 +125,12 @@ function writeBucDetailBlockAtRow_(sh, rowStart, bucIdToken, bucName, skeletonOn
   skeletonOnly = !!skeletonOnly;
   stepRows = stepRows || [];
 
-  var heading = '▼ ' + bucIdToken + ': ' + bucName;
+  let heading = '▼ ' + bucIdToken + ': ' + bucName;
   sh.getRange(rowStart, 1).setValue(heading).setFontWeight('bold').setBackground('#e8f0fe');
   sh.getRange(rowStart, 1, 1, 3).merge();
 
-  var hdrRow = rowStart + 1;
-  var labels = [['手順', '行動内容', '関連UC']];
+  let hdrRow = rowStart + 1;
+  let labels = [['手順', '行動内容', '関連UC']];
   sh.getRange(hdrRow, 1, 1, 3).setValues(labels);
   sh.getRange(hdrRow, 1, 1, 3).setBackground('#1a73e8').setFontColor('#ffffff').setFontWeight('bold');
 
@@ -139,7 +139,7 @@ function writeBucDetailBlockAtRow_(sh, rowStart, bucIdToken, bucName, skeletonOn
     return;
   }
   if (stepRows.length > 0) {
-    var dStart = hdrRow + 1;
+    let dStart = hdrRow + 1;
     sh.getRange(dStart, 1, stepRows.length, 3).setValues(stepRows);
     sh.getRange(dStart, 2, stepRows.length, 1).setWrap(true);
   }
@@ -173,13 +173,13 @@ function setupUseCaseDetail(ss) {
 function writeUcDetailBlockAtRow_(sh, rowStart, ucIdToken, ucName, ucActorLabel, skeletonOnly) {
   skeletonOnly = !!skeletonOnly;
 
-  var heading = '▼ ' + ucIdToken + ': ' + ucName;
+  let heading = '▼ ' + ucIdToken + ': ' + ucName;
   sh.getRange(rowStart, 1).setValue(heading).setFontWeight('bold').setBackground('#e8f0fe');
   sh.getRange(rowStart, 1, 1, 5).merge();
 
-  var ucDetail;
-  var flows;
-  var alts;
+  let ucDetail;
+  let flows;
+  let alts;
 
   if (skeletonOnly) {
     ucDetail = [
@@ -209,23 +209,23 @@ function writeUcDetailBlockAtRow_(sh, rowStart, ucIdToken, ucName, ucActorLabel,
     ];
   }
 
-  var metaStart = rowStart + 1;
+  let metaStart = rowStart + 1;
   sh.getRange(metaStart, 1, ucDetail.length, 5).setValues(ucDetail);
   sh.getRange(metaStart, 1, ucDetail.length, 1).setFontWeight('bold').setBackground('#f8f9fa');
 
-  var flowStart = rowStart + ucDetail.length + 2;
+  let flowStart = rowStart + ucDetail.length + 2;
   sh.getRange(flowStart, 1).setValue('基本フロー').setFontWeight('bold');
 
   if (skeletonOnly) {
-    var altStartSk = flowStart + 2;
+    let altStartSk = flowStart + 2;
     sh.getRange(altStartSk, 1).setValue('代替フロー').setFontWeight('bold');
   } else {
-    var flowDataStart = flowStart + 1;
+    let flowDataStart = flowStart + 1;
     sh.getRange(flowDataStart, 1, flows.length, 2).setValues(flows);
 
-    var altStart = flowStart + flows.length + 2;
+    let altStart = flowStart + flows.length + 2;
     sh.getRange(altStart, 1).setValue('代替フロー').setFontWeight('bold');
-    var altDataStart = altStart + 1;
+    let altDataStart = altStart + 1;
     sh.getRange(altDataStart, 1, alts.length, 2).setValues(alts);
   }
 }
@@ -284,10 +284,10 @@ function setupExternalIF(ss) {
 
 
 function setupAssumptions(ss) {
-  var sh = getOrCreateSheet(ss, '📌 前提条件');
+  let sh = getOrCreateSheet(ss, '📌 前提条件');
   resetSheetCellsForTemplate_(sh);
 
-  var headers = ['前提ID', '前提条件', 'リスク（崩れた場合の影響）'];
+  let headers = ['前提ID', '前提条件', 'リスク（崩れた場合の影響）'];
   sh.getRange(1, 1, 1, headers.length).setValues([headers]);
   styleHeader(sh, 1, headers.length);
 
@@ -336,9 +336,9 @@ function setupChangeLog(ss) {
 
 
 function seedTemplateSampleRows_(ss) {
-  var sh;
-  var data;
-  var n;
+  let sh;
+  let data;
+  let n;
 
   sh = ss.getSheetByName('👤 アクター');
   if (sh) {
@@ -374,8 +374,8 @@ function seedTemplateSampleRows_(ss) {
       ['BUC-003', '納期回答業務', '在庫と配送状況を確認し、顧客へ納期を伝える仕事', 'BR-003'],
     ];
     sh.getRange(2, 1, data.length, 4).setValues(data);
-    var bucFormulas = [];
-    var br;
+    let bucFormulas = [];
+    let br;
     for (br = 0; br < data.length; br++) {
       bucFormulas.push([bucBrMirrorFormula_(2 + br)]);
     }
@@ -506,8 +506,8 @@ function seedTemplateSampleRows_(ss) {
 
   sh = ss.getSheetByName('✅ 変更履歴');
   if (sh) {
-    var tz = ss.getSpreadsheetTimeZone() || 'Asia/Tokyo';
-    var createdDate = Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd');
+    let tz = ss.getSpreadsheetTimeZone() || 'Asia/Tokyo';
+    let createdDate = Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd');
     sh.getRange(2, 1, 1, 5).setValues([['1.0.0', createdDate, '', '初版作成', '全体']]);
     sh.setRowHeights(1, sh.getLastRow(), 24);
   }
