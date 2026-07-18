@@ -9,7 +9,7 @@ function setupOverview(ss) {
   sh.getRange('A1:D1').merge();
 
   const meta = [
-    ['ドキュメントID', 'REQ-XXXX',      'バージョン',      '1.0.0'],
+    ['ドキュメントID', 'REQ-XXXX',      'バージョン',      '1.0'],
     ['ステータス',     '草案',           '作成日',          ''],
     ['最終更新日',     '',               '作成者',          ''],
     ['承認者（顧客）', '',               '承認者（自社）',   ''],
@@ -508,7 +508,7 @@ function seedTemplateSampleRows_(ss) {
   if (sh) {
     let tz = ss.getSpreadsheetTimeZone() || 'Asia/Tokyo';
     let createdDate = Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd');
-    sh.getRange(2, 1, 1, 5).setValues([['1.0.0', createdDate, '', '初版作成', '全体']]);
+    sh.getRange(2, 1, 1, 5).setValues([['1.0', createdDate, '', '初版作成', '全体']]);
     sh.setRowHeights(1, sh.getLastRow(), 24);
   }
 }
