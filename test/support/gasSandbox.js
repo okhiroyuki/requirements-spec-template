@@ -4,16 +4,29 @@ import vm from 'node:vm';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const GAS_SOURCE_PATH = path.join(__dirname, '..', '..', 'create-spreadsheet.gs');
+const PROJECT_ROOT = path.join(__dirname, '..', '..');
+
+// Mirrors the Apps Script project's file list. Within one Apps Script
+// project every file shares a single global scope, so load order does not
+// affect which functions can call which — this list just documents the
+// project's files in one place.
+const GAS_SOURCE_FILES = [
+  'template-setup.gs',
+  'validation.gs',
+  'template-sheets.gs',
+  'ids.gs',
+  'menu.gs',
+  'markdown-export.gs',
+];
 
 /**
- * Loads create-spreadsheet.gs, unmodified, into a vm context stubbed with
- * just enough of the Apps Script globals for its pure-logic functions to
- * run. This lets us test the actual shipped file instead of a copy.
+ * Loads the project's .gs files, unmodified, into a single vm context
+ * stubbed with just enough of the Apps Script globals for their pure-logic
+ * functions to run. This tests the actual shipped files instead of a copy,
+ * the same way Apps Script itself merges multiple files into one global
+ * scope.
  */
 export function loadGasContext() {
-  const source = fs.readFileSync(GAS_SOURCE_PATH, 'utf8');
-
   const sandbox = {
     Utilities: {
       formatDate(date, timeZone, format) {
@@ -36,12 +49,15 @@ export function loadGasContext() {
     },
   };
   vm.createContext(sandbox);
-  vm.runInContext(source, sandbox, { filename: 'create-spreadsheet.gs' });
+  for (const fileName of GAS_SOURCE_FILES) {
+    const source = fs.readFileSync(path.join(PROJECT_ROOT, fileName), 'utf8');
+    vm.runInContext(source, sandbox, { filename: fileName });
+  }
 
   // Built-ins of a vm context (Date, Array, ...) live in that context's own
   // realm and are not exposed as ordinary properties on the sandbox object.
-  // Functions defined in create-spreadsheet.gs resolve `Date` against that
-  // realm, so tests must construct dates via this same constructor for
+  // Functions defined in these .gs files resolve `Date` against that realm,
+  // so tests must construct dates via this same constructor for
   // `instanceof Date` checks inside the script to succeed.
   sandbox.Date = vm.runInContext('Date', sandbox);
 
