@@ -44,3 +44,13 @@ flowchart TB
 - `createRequirementsSheet` をもう一度実行すると、確認なしで全シートが初期サンプルに戻る。すでに入力したブックがあるなら **再実行しない**（データが消える）。
 - **列やタブ構成を手で大きく変えると**、行追加・Markdown 書き出し・ID 同期などがスクリプトの前提とずれることがある。テンプレを変えたいときは [`create-spreadsheet.gs`](create-spreadsheet.gs) を編集してください。
 
+## 開発者向け：テスト
+
+`create-spreadsheet.gs` のうち、ID採番・Markdown整形・BUC/UC詳細のパースなど Google Sheets API に依存しないロジックを Vitest でテストしています（`test/`）。`create-spreadsheet.gs` 自体は変更せず、Node の `vm` モジュールでファイルをそのまま読み込み、`SpreadsheetApp` 等の呼び出し箇所だけ最小限のスタブ／モックシートに差し替えて検証します。
+
+```bash
+pnpm install
+pnpm test        # 一括実行
+pnpm test:watch  # 変更を監視して再実行
+```
+
