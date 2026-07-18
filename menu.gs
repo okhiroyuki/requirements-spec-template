@@ -61,6 +61,8 @@ function onOpen() {
     .addItem('📖 選択行の UC 詳細を追加／更新', 'menuAppendUcDetailFromListRow')
     .addSeparator()
     .addItem('📝 Markdown を作成（表示・コピー）', 'exportRequirementsToMarkdown')
+    .addSeparator()
+    .addItem('🆕 テンプレートを構築', 'createRequirementsSheet')
     .addToUi();
 }
 
